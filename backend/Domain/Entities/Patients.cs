@@ -1,11 +1,8 @@
 ﻿using Domain.Enums;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Domain.Entities
 {
-    public class Patients(string name,string email,Guid institutionId)
+    public class Patients(string name, string email, Guid institutionId)
     {
         public Guid ID { get; private set; } = Guid.NewGuid();
         public string Name { get; private set; } = name ?? throw new ArgumentNullException(nameof(name));
@@ -19,7 +16,7 @@ namespace Domain.Entities
         {
             if (string.IsNullOrWhiteSpace(newEmail))
                 throw new ArgumentException("Email cannot be empty", nameof(newEmail));
-            
+
             Email = newEmail;
         }
 
@@ -32,7 +29,7 @@ namespace Domain.Entities
         {
             if (string.IsNullOrWhiteSpace(newFingerPrint))
                 throw new ArgumentException("Fingerprint cannot be empty", nameof(newFingerPrint));
-            
+
             FingerPrint = newFingerPrint;
         }
     }

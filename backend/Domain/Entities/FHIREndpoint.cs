@@ -16,7 +16,7 @@ namespace Domain.Entities
         {
             if (string.IsNullOrWhiteSpace(resource))
                 throw new ArgumentException("Resource cannot be null or empty", nameof(resource));
-            
+
             SupportedResources.Add(resource);
         }
         public async Task UpdateVerificationStatus(VerificationStatus status)

@@ -17,7 +17,7 @@ namespace Domain.Entities
         {
             if (string.IsNullOrWhiteSpace(endpoint))
                 throw new ArgumentException("Endpoint cannot be null or empty", nameof(endpoint));
-            
+
             FhirEndpoints.Add(new FHIREndpoint(endpoint, supportedResource));
         }
         public async Task UpdateVerificationStatus(VerificationStatus status)
