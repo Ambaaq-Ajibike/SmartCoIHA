@@ -1,12 +1,11 @@
 ﻿using Domain.Enums;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Domain.Entities
 {
     public class FHIREndpoint(string url, List<string> supportedResponse)
     {
+        private FHIREndpoint() : this(string.Empty, []) { }
+
         public Guid Id { get; private set; } = Guid.NewGuid();
         public string Url { get; set; } = url ?? throw new ArgumentNullException(nameof(url));
         public List<string> SupportedResources { get; private set; } = supportedResponse;

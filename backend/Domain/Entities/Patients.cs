@@ -4,6 +4,8 @@ namespace Domain.Entities
 {
     public class Patients(string name, string email, Guid institutionId)
     {
+        public Patients() : this(string.Empty, string.Empty, Guid.Empty) { }
+
         public Guid ID { get; private set; } = Guid.NewGuid();
         public string Name { get; private set; } = name ?? throw new ArgumentNullException(nameof(name));
         public string Email { get; private set; } = email ?? throw new ArgumentNullException(nameof(email));
