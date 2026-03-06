@@ -9,6 +9,7 @@ namespace Application
         public static void AddApplicationServices(this IServiceCollection services)
         {
             services.AddScoped<IInstitutionService, InstitutionService>();
+            services.AddScoped<IPatientService, PatientService>();
         }
     }
 }

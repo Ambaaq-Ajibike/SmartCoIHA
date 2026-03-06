@@ -1,5 +1,6 @@
 ﻿using Application.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace Persistence.Data.Repositories
 {
@@ -12,9 +13,9 @@ namespace Persistence.Data.Repositories
             return await _context.Set<T>().FindAsync(id);
         }
 
-        public async Task<IReadOnlyList<T>> GetAllAsync()
+        public async Task<IReadOnlyList<T>> GetAllAsync(Expression<Func<T, bool>> exp)
         {
-            return await _context.Set<T>().ToListAsync();
+            return await _context.Set<T>().Where(exp).ToListAsync();
         }
 
         public async Task<T> AddAsync(T entity)

@@ -1,9 +1,12 @@
 ﻿using Application.Repositories.Interfaces;
+using Application.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Persistence.Data;
 using Persistence.Data.Repositories;
+using Persistence.EmailServices;
+using Persistence.Messaging;
 
 namespace Persistence
 {
@@ -17,6 +20,11 @@ namespace Persistence
                 options.UseNpgsql(connectionString));
 
             services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+            services.AddSingleton<RabbitMqProducer>();
+            services.AddSingleton<RabbitMqConsumer>();
+
+
+            services.AddScoped<IEmailService, BrevoEmailService>();
         }
     }
 }

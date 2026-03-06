@@ -31,7 +31,7 @@ namespace Domain.Entities
         {
             if (string.IsNullOrWhiteSpace(newFingerPrint))
                 throw new ArgumentException("Fingerprint cannot be empty", nameof(newFingerPrint));
-
+            EnrollmentStatus = VerificationStatus.Verified;
             FingerPrint = newFingerPrint;
         }
     }
