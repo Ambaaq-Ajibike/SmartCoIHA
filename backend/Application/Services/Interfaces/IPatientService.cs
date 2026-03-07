@@ -1,5 +1,6 @@
 ﻿using Application.Dtos;
 using Domain.Enums;
+using Microsoft.AspNetCore.Http;
 
 namespace Application.Services.Interfaces
 {
@@ -7,7 +8,8 @@ namespace Application.Services.Interfaces
     {
         Task<BaseResponse<Guid>> RegsiterPatientAsync(RegisterPatientDto patientDto);
         Task<BaseResponse<PatientDto>> GetPatientByIdAsync(Guid patientId);
-        Task<BaseResponse<PatientDto>> GetPatientsAsync(string? institutionId, VerificationStatus? enrollmentStatus);
+        Task<BaseResponse<IEnumerable<PatientDto>>> GetPatientsAsync(string? institutionId, VerificationStatus? enrollmentStatus);
         Task<BaseResponse<bool>> AddFingerprintAsync(Guid patientId, string fingerprintTemplate);
+        Task<BaseResponse<BulkUploadResultDto>> BulkUploadPatientsAsync(IFormFile csvFile, Guid institutionId);
     }
 }

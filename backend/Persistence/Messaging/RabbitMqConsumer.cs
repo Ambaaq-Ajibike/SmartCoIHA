@@ -11,7 +11,10 @@ public class RabbitMqConsumer
     {
         var factory = new ConnectionFactory()
         {
-            HostName = "localhost"
+            HostName = "localhost",
+            Port = 5672,
+            UserName = "guest",
+            Password = "GUEST"
         };
 
         var connection = await factory.CreateConnectionAsync();

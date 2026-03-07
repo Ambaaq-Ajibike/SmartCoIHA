@@ -1,4 +1,5 @@
-﻿using Application.Repositories.Interfaces;
+﻿using Application.Messaging.Interfaces;
+using Application.Repositories.Interfaces;
 using Application.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -20,10 +21,11 @@ namespace Persistence
                 options.UseNpgsql(connectionString));
 
             services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
-            services.AddSingleton<RabbitMqProducer>();
+            services.AddSingleton<IMessagePublisher, RabbitMqProducer>();
             services.AddSingleton<RabbitMqConsumer>();
 
 
+            services.AddScoped<IEmailService, BrevoEmailService>();
             services.AddScoped<IEmailService, BrevoEmailService>();
         }
     }

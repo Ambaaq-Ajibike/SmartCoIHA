@@ -7,7 +7,7 @@
 
     public class RabbitMqConsumerService(
         RabbitMqConsumer _consumer,
-        IEmailService _emailService) : BackgroundService
+        IServiceScopeFactory _scopeFactory) : BackgroundService
     {
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -22,8 +22,11 @@
                         ? message.Body
                         : $"<html><body><pre>{message.Body}</pre></body></html>";
 
+                    using var scope = _scopeFactory.CreateScope();
+                    var emailService = scope.ServiceProvider
+                   .GetRequiredService<IEmailService>();
                     // Send email using Brevo
-                    var success = await _emailService.SendEmailAsync(
+                    var success = await emailService.SendEmailAsync(
                         toEmail: message.To,
                         toName: message.To,
                         subject: message.Subject,

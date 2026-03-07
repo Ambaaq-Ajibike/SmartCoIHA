@@ -2,13 +2,14 @@
 using Application.Services.Interfaces;
 using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
+using System.Text;
 
 namespace API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
     [Produces("application/json")]
-    public class PatientController(IPatientService _patientService) : ControllerBase
+    public class PatientsController(IPatientService _patientService) : ControllerBase
     {
 
         [HttpPost("register")]
@@ -59,6 +60,39 @@ namespace API.Controllers
             return response.Success
                 ? Ok(response)
                 : BadRequest(response);
+        }
+
+        [HttpPost("bulk-upload/{institutionId}")]
+        [ProducesResponseType(typeof(BaseResponse<BulkUploadResultDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(BaseResponse<BulkUploadResultDto>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [RequestSizeLimit(10 * 1024 * 1024)] // 10 MB limit
+        public async Task<IActionResult> BulkUpload(IFormFile file, Guid institutionId)
+        {
+            var response = await _patientService.BulkUploadPatientsAsync(file, institutionId);
+            return Ok(response);
+        }
+
+        [HttpGet("bulk-upload-template")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Produces("text/csv")]
+        public IActionResult DownloadBulkUploadTemplate()
+        {
+            var csv = new StringBuilder();
+
+            // Add headers
+            csv.AppendLine("Name,Email");
+
+            // Add sample rows (optional - helps users understand the format)
+            csv.AppendLine("John Doe,john.doe@example.com");
+            csv.AppendLine("Jane Smith,jane.smith@example.com");
+            csv.AppendLine("Michael Johnson,michael.johnson@example.com");
+
+            var bytes = Encoding.UTF8.GetBytes(csv.ToString());
+            var fileName = $"patient_bulk_upload_template_{DateTime.UtcNow:yyyyMMdd}.csv";
+
+            return File(bytes, "text/csv", fileName);
         }
     }
 }

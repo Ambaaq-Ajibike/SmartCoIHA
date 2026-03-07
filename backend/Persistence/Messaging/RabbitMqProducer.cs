@@ -11,7 +11,10 @@ namespace Persistence.Messaging
         {
             var factory = new ConnectionFactory()
             {
-                HostName = "localhost"
+                HostName = "localhost",
+                Port = 5672,
+                UserName = "guest",
+                Password = "GUEST"
             };
 
             using var connection = await factory.CreateConnectionAsync();
