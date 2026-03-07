@@ -5,5 +5,6 @@
         Pending,
         Verified,
         Failed,
+        Denied
     }
 }

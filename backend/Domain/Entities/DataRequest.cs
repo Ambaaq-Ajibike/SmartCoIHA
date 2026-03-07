@@ -3,19 +3,18 @@
 namespace Domain.Entities
 {
     public class DataRequest(
-        string patientId,
-        string resourceType,
-        DateTime requestedTimestamp,
-        VerificationStatus institutionApprovedStatus,
-        bool fingerprintValidationSuccess)
+        Guid requestingInstitutionId,
+        string institutePatientId,
+        string resourceType)
     {
         public Guid Id { get; private set; } = Guid.NewGuid();
-        public string PatientId { get; private set; } = patientId;
+        public Guid RequestingInstitutionId { get; private set; } = requestingInstitutionId;
+        public string InstitutePatientId { get; private set; } = institutePatientId;
         public string ResourceType { get; private set; } = resourceType;
-        public DateTime RequestedTimestamp { get; private set; } = requestedTimestamp;
-        public DateTime ExpiryTimestamp { get; private set; } = requestedTimestamp + TimeSpan.FromHours(2);
-        public VerificationStatus InstitutionApprovedStatus { get; private set; } = institutionApprovedStatus;
-        public bool FingerprintValidationSuccess { get; private set; } = fingerprintValidationSuccess;
+        public DateTime RequestedTimestamp { get; private set; } = DateTime.Now;
+        public DateTime ExpiryTimestamp { get; private set; } = DateTime.Now + TimeSpan.FromHours(2);
+        public VerificationStatus InstitutionApprovedStatus { get; private set; } = VerificationStatus.Pending;
+        public bool FingerprintValidationSuccess { get; private set; } = false;
 
         public bool IsExpired() => DateTime.UtcNow > ExpiryTimestamp;
 
@@ -24,6 +23,11 @@ namespace Domain.Entities
         public async Task UpdateInstitutionApprovalStatus(VerificationStatus newStatus)
         {
             InstitutionApprovedStatus = newStatus;
+
+        }
+        public async Task UpdateFingerprintValidationResult(bool isSuccess)
+        {
+            FingerprintValidationSuccess = isSuccess;
         }
     }
 }

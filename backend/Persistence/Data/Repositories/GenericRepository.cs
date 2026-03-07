@@ -12,6 +12,10 @@ namespace Persistence.Data.Repositories
         {
             return await _context.Set<T>().FindAsync(id);
         }
+        public async Task<T> GetByExpressionAsync(Expression<Func<T, bool>> exp)
+        {
+            return await _context.Set<T>().FirstOrDefaultAsync(exp);
+        }
 
         public async Task<IReadOnlyList<T>> GetAllAsync(Expression<Func<T, bool>> exp)
         {

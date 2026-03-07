@@ -39,7 +39,7 @@ namespace Application.Services.Implementations
                 return new BaseResponse<Guid>(false, $"Institution with ID {patientDto.InstitutionId} not found.", Guid.Empty);
             }
 
-            var patient = new Patients(patientDto.Name, patientDto.Email, patientDto.InstitutionId);
+            var patient = new Patients(patientDto.Name, patientDto.Email, patientDto.InstitutionId, patientDto.InstitutePatientId);
 
             var createdPatient = await _patientRepository.AddAsync(patient);
             await _patientRepository.SaveChangesAsync();
@@ -272,7 +272,7 @@ namespace Application.Services.Implementations
                 return (false, "CSV file has no headers.");
             }
 
-            var requiredHeaders = new[] { "Name", "Email" };
+            var requiredHeaders = new[] { "ID", "Name", "Email" };
             var missingHeaders = requiredHeaders
                 .Where(required => !headers.Any(h => h.Equals(required, StringComparison.OrdinalIgnoreCase)))
                 .ToList();
@@ -335,7 +335,7 @@ namespace Application.Services.Implementations
                     continue;
                 }
 
-                var patient = new Patients(record.Name, record.Email, institutionId);
+                var patient = new Patients(record.Name, record.Email, institutionId, record.ID);
                 patientsToAdd.Add(patient);
             }
 
@@ -363,7 +363,7 @@ namespace Application.Services.Implementations
         {
             try
             {
-                var patientDto = new RegisterPatientDto(record.Name, record.Email, institutionId);
+                var patientDto = new RegisterPatientDto(record.Name, record.Email, institutionId, record.ID);
 
                 var validationResult = await validator.ValidateAsync(patientDto);
                 if (!validationResult.IsValid)

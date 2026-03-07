@@ -2,13 +2,14 @@
 
 namespace Domain.Entities
 {
-    public class Patients(string name, string email, Guid institutionId)
+    public class Patients(string name, string email, Guid institutionId, string institutePatientId)
     {
-        public Patients() : this(string.Empty, string.Empty, Guid.Empty) { }
+        public Patients() : this(string.Empty, string.Empty, Guid.Empty, string.Empty) { }
 
         public Guid ID { get; private set; } = Guid.NewGuid();
         public string Name { get; private set; } = name ?? throw new ArgumentNullException(nameof(name));
         public string Email { get; private set; } = email ?? throw new ArgumentNullException(nameof(email));
+        public string InstitutePatientId { get; private set; } = institutePatientId;
         public Guid InstitutionID { get; private set; } = institutionId;
         public Institution Institution { get; private set; } = null!;
         public VerificationStatus EnrollmentStatus { get; private set; } = VerificationStatus.Pending;

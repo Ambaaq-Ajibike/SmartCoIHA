@@ -82,12 +82,12 @@ namespace API.Controllers
             var csv = new StringBuilder();
 
             // Add headers
-            csv.AppendLine("Name,Email");
+            csv.AppendLine("ID,Name,Email");
 
             // Add sample rows (optional - helps users understand the format)
-            csv.AppendLine("John Doe,john.doe@example.com");
-            csv.AppendLine("Jane Smith,jane.smith@example.com");
-            csv.AppendLine("Michael Johnson,michael.johnson@example.com");
+            csv.AppendLine("1,John Doe,john.doe@example.com");
+            csv.AppendLine("2,Jane Smith,jane.smith@example.com");
+            csv.AppendLine("3,Michael Johnson,michael.johnson@example.com");
 
             var bytes = Encoding.UTF8.GetBytes(csv.ToString());
             var fileName = $"patient_bulk_upload_template_{DateTime.UtcNow:yyyyMMdd}.csv";
