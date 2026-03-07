@@ -2,6 +2,7 @@
 {
     public class FhirResourceStatus(string resourceName, Guid instituteBaseUrlId)
     {
+        public Guid Id { get; private set; } = Guid.NewGuid();
         public string ResourceName { get; private set; } = resourceName;
         public bool IsVerified { get; private set; } = false;
         public string? ErrorMessage { get; private set; }
