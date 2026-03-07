@@ -7,7 +7,7 @@ namespace Persistence.Data
     {
         public DbSet<DataRequest> DataRequests { get; set; }
         public DbSet<Patients> Patients { get; set; }
-        public DbSet<FHIREndpoint> FHIREndpoints { get; set; }
+        public DbSet<InstituteBaserUrl> FHIREndpoints { get; set; }
         public DbSet<Institution> Institutions { get; set; }
 
     }

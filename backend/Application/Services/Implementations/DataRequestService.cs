@@ -4,12 +4,15 @@ using Application.Services.Interfaces;
 using Application.Validators;
 using Domain.Entities;
 using Domain.Enums;
+using Hl7.Fhir.Model;
+using Hl7.Fhir.Rest;
 
 namespace Application.Services.Implementations
 {
     public class DataRequestService(
         IGenericRepository<DataRequest> _dataRequestRepository,
         IGenericRepository<Patients> _patientRepository,
+        IGenericRepository<InstituteBaserUrl> _endpointRepository,
         IGenericRepository<Institution> _institutionRepository) : IDataRequestService
     {
         public async Task<BaseResponse<Guid>> MakeDataRequestAsync(MakeDataRequestDto dataRequestDto)
@@ -245,5 +248,235 @@ namespace Application.Services.Implementations
                 true);
         }
 
+        public async Task<BaseResponse<Resource>> GetPatientResourceDataAsync(Guid requestId)
+        {
+            // Get data request
+            var dataRequest = await _dataRequestRepository.GetByIdAsync(requestId);
+            if (dataRequest == null)
+            {
+                return new BaseResponse<Resource>(
+                    false,
+                    "Data request not found.",
+                    null);
+            }
+
+            // Check if request has expired
+            if (dataRequest.IsExpired())
+            {
+                return new BaseResponse<Resource>(
+                    false,
+                    "Data request has expired. Please create a new request.",
+                    null);
+            }
+
+            // Check if institution has approved the request
+            if (dataRequest.InstitutionApprovedStatus != VerificationStatus.Verified)
+            {
+                var statusMessage = dataRequest.InstitutionApprovedStatus == VerificationStatus.Denied
+                    ? "Data request was rejected by the institution."
+                    : "Data request is pending institution approval.";
+
+                return new BaseResponse<Resource>(
+                    false,
+                    statusMessage,
+                    null);
+            }
+
+            // Check if patient fingerprint has been validated
+            if (!dataRequest.FingerprintValidationSuccess)
+            {
+                return new BaseResponse<Resource>(
+                    false,
+                    "Patient fingerprint validation is required before accessing data.",
+                    null);
+            }
+
+            var patient = await _patientRepository.GetByExpressionAsync(p => p.InstitutePatientId == dataRequest.InstitutePatientId);
+            if (patient == null)
+            {
+                return new BaseResponse<Resource>(
+                    false,
+                    "Patient not found.",
+                    null);
+            }
+
+            // Get patient's institution to retrieve FHIR endpoint
+            var institution = await _institutionRepository.GetByIdAsync(patient.InstitutionID);
+            if (institution == null)
+            {
+                return new BaseResponse<Resource>(
+                    false,
+                    "Patient's institution not found.",
+                    null);
+            }
+
+            // Get FHIR endpoint for the institution
+            var endpointResult = await GetInstitutionFhirEndpointAsync(patient.InstitutionID);
+            if (!endpointResult.IsSuccess)
+            {
+                return new BaseResponse<Resource>(
+                    false,
+                    endpointResult.ErrorMessage!,
+                    null);
+            }
+
+            // Fetch resource data from FHIR endpoint
+            try
+            {
+                var resourceData = await FetchFhirResourceDataAsync(
+                    endpointResult.BaseUrl!,
+                    dataRequest.ResourceType,
+                    dataRequest.InstitutePatientId);
+
+                if (resourceData is null)
+                {
+                    return new BaseResponse<Resource>(
+                        false,
+                        $"No {dataRequest.ResourceType} data found for the patient.",
+                       null);
+                }
+
+                return new BaseResponse<Resource>(
+                    true,
+                    "Patient resource data retrieved successfully.",
+                    resourceData);
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse<Resource>(
+                    false,
+                    $"Error retrieving data from FHIR endpoint: {ex.Message}",
+                    null);
+            }
+        }
+
+        private async Task<(bool IsSuccess, string? BaseUrl, string? ErrorMessage)> GetInstitutionFhirEndpointAsync(Guid institutionId)
+        {
+
+            var endpoint = await _endpointRepository.GetByExpressionAsync(e =>
+                e.InstitutionID == institutionId &&
+                e.VerificationStatus == VerificationStatus.Verified);
+
+            if (endpoint is null)
+            {
+                return (false, null, "No verified FHIR endpoint found for the patient's institution.");
+            }
+
+            return (true, endpoint.Url, null);
+        }
+
+        private static async Task<Resource> FetchFhirResourceDataAsync(
+            string baseUrl,
+            string resourceType,
+            string patientId)
+        {
+            var settings = new FhirClientSettings
+            {
+                Timeout = 30000, // 30 seconds
+                PreferredFormat = ResourceFormat.Json,
+                VerifyFhirVersion = false
+            };
+
+            var client = new FhirClient(baseUrl, settings);
+
+            // Fetch data based on resource type
+            var resourceData = resourceType.ToLower() switch
+            {
+                "patient" => await FetchPatientDataAsync(client, patientId),
+                "observation" => await FetchObservationDataAsync(client, patientId),
+                "condition" => await FetchConditionDataAsync(client, patientId),
+                "medicationrequest" => await FetchMedicationRequestDataAsync(client, patientId),
+                "diagnosticreport" => await FetchDiagnosticReportDataAsync(client, patientId),
+                "procedure" => await FetchProcedureDataAsync(client, patientId),
+                "encounter" => await FetchEncounterDataAsync(client, patientId),
+                "allergyintolerance" => await FetchAllergyIntoleranceDataAsync(client, patientId),
+                "immunization" => await FetchImmunizationDataAsync(client, patientId),
+                "careplan" => await FetchCarePlanDataAsync(client, patientId),
+                "goal" => await FetchGoalDataAsync(client, patientId),
+                "documentreference" => await FetchDocumentReferenceDataAsync(client, patientId),
+                _ => await FetchGenericResourceDataAsync(client, resourceType, patientId)
+            };
+
+            return resourceData;
+        }
+
+        private static async Task<Patient> FetchPatientDataAsync(FhirClient client, string patientId)
+        {
+            var patient = await client.ReadAsync<Patient>($"Patient/{patientId}");
+            return patient;
+        }
+
+        private static async Task<Bundle> FetchObservationDataAsync(FhirClient client, string patientId)
+        {
+            var bundle = await client.SearchAsync<Observation>([$"patient={patientId}", "_count=100"]);
+            return bundle;
+        }
+
+        private static async Task<Bundle> FetchConditionDataAsync(FhirClient client, string patientId)
+        {
+            var bundle = await client.SearchAsync<Condition>([$"patient={patientId}", "_count=100"]);
+            return bundle;
+        }
+
+        private static async Task<Bundle> FetchMedicationRequestDataAsync(FhirClient client, string patientId)
+        {
+            var bundle = await client.SearchAsync<MedicationRequest>([$"patient={patientId}", "_count=100"]);
+            return bundle;
+        }
+
+        private static async Task<Bundle> FetchDiagnosticReportDataAsync(FhirClient client, string patientId)
+        {
+            var bundle = await client.SearchAsync<DiagnosticReport>([$"patient={patientId}", "_count=100"]);
+            return bundle;
+        }
+
+        private static async Task<Bundle> FetchProcedureDataAsync(FhirClient client, string patientId)
+        {
+            var bundle = await client.SearchAsync<Procedure>([$"patient={patientId}", "_count=100"]);
+            return bundle;
+        }
+
+        private static async Task<Bundle> FetchEncounterDataAsync(FhirClient client, string patientId)
+        {
+            var bundle = await client.SearchAsync<Encounter>([$"patient={patientId}", "_count=100"]);
+            return bundle;
+        }
+
+        private static async Task<Bundle> FetchAllergyIntoleranceDataAsync(FhirClient client, string patientId)
+        {
+            var bundle = await client.SearchAsync<AllergyIntolerance>([$"patient={patientId}", "_count=100"]);
+            return bundle;
+        }
+
+        private static async Task<Bundle> FetchImmunizationDataAsync(FhirClient client, string patientId)
+        {
+            var bundle = await client.SearchAsync<Immunization>([$"patient={patientId}", "_count=100"]);
+            return bundle;
+        }
+
+        private static async Task<Bundle> FetchCarePlanDataAsync(FhirClient client, string patientId)
+        {
+            var bundle = await client.SearchAsync<CarePlan>([$"patient={patientId}", "_count=100"]);
+            return bundle;
+        }
+
+        private static async Task<Bundle> FetchGoalDataAsync(FhirClient client, string patientId)
+        {
+            var bundle = await client.SearchAsync<Goal>([$"patient={patientId}", "_count=100"]);
+            return bundle;
+        }
+
+        private static async Task<Bundle> FetchDocumentReferenceDataAsync(FhirClient client, string patientId)
+        {
+            var bundle = await client.SearchAsync<DocumentReference>([$"patient={patientId}", "_count=100"]);
+            return bundle;
+        }
+
+        private static async Task<Resource> FetchGenericResourceDataAsync(FhirClient client, string resourceType, string patientId)
+        {
+            var url = $"{resourceType}?patient={patientId}&_count=100";
+            var result = await client.GetAsync(url);
+            return result;
+        }
     }
 }
