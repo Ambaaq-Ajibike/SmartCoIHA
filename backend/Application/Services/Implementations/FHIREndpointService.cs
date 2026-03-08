@@ -37,35 +37,57 @@ namespace Application.Services.Implementations
                     "Institution not found.",
                     Guid.Empty);
             }
-            var existingEndpoints = await _endpointRepository.GetByExpressionAsync(e => e.InstitutionID == request.InstitutionId);
 
-            if (existingEndpoints is not null)
-            {
-                return new BaseResponse<Guid>(
-                    false,
-                    "FHIR endpoint URL is already registered for the institution.",
-                    Guid.Empty);
-            }
+            var existingEndpoint = await _endpointRepository.GetByExpressionAsync(e => e.InstitutionID == request.InstitutionId);
 
             // Normalize URL (remove trailing slash)
             var normalizedUrl = request.Url.TrimEnd('/');
+            var endpointId = Guid.NewGuid();
 
-            // Create endpoint
-            var endpoint = new InstituteBaserUrl(normalizedUrl, request.InstitutionId);
-            var createdEndpoint = await _endpointRepository.AddAsync(endpoint);
+            if (existingEndpoint is not null)
+            {
+                endpointId = existingEndpoint.Id;
 
-            // Create resource status entries
+                // Remove all existing resource status entries for this endpoint FIRST
+                var existingResourceStatuses = await _resourceStatusRepository.GetAllAsync(r => r.InstituteBaseUrlId == endpointId);
+
+                foreach (var resourceStatus in existingResourceStatuses)
+                {
+                    _resourceStatusRepository.Delete(resourceStatus);
+                }
+
+                // Update endpoint URL
+                await existingEndpoint.UpdateUrl(normalizedUrl);
+                _endpointRepository.Update(existingEndpoint);
+
+                // Save both deletions and endpoint update together
+                await _endpointRepository.SaveChangesAsync();
+            }
+            else
+            {
+                // Create new endpoint
+                var endpoint = new InstituteBaserUrl(normalizedUrl, request.InstitutionId);
+                var createdEndpoint = await _endpointRepository.AddAsync(endpoint);
+                endpointId = createdEndpoint.Id;
+
+                // Save the new endpoint so it exists before adding resource statuses
+                await _endpointRepository.SaveChangesAsync();
+            }
+
+            // Create new resource status entries
             foreach (var resourceName in request.SupportedResources.Distinct())
             {
-                var resourceStatus = new FhirResourceStatus(resourceName, createdEndpoint.Id);
+                var resourceStatus = new FhirResourceStatus(resourceName, endpointId);
                 await _resourceStatusRepository.AddAsync(resourceStatus);
             }
+
+            // Save the new resource statuses
             await _resourceStatusRepository.SaveChangesAsync();
 
             // Enqueue validation message to RabbitMQ
             var validationMessage = new FhirEndpointValidationMessage
             {
-                EndpointId = createdEndpoint.Id,
+                EndpointId = endpointId,
                 BaseUrl = normalizedUrl,
                 SupportedResources = request.SupportedResources.Distinct().ToList(),
                 TestingPatientId = request.TestingPatientId
@@ -75,8 +97,8 @@ namespace Application.Services.Implementations
 
             return new BaseResponse<Guid>(
                 true,
-                "FHIR endpoint added successfully. Validation is in progress.",
-                createdEndpoint.Id);
+                "FHIR endpoint upserted successfully. Validation is in progress.",
+                endpointId);
         }
 
         public async Task<BaseResponse<FHIREndpointDto>> GetEndpointByInstitutionIdAsync(Guid institutionId)
@@ -103,7 +125,7 @@ namespace Application.Services.Implementations
             }
 
             // Get resource statuses
-            var resourceStatuses = await _resourceStatusRepository.GetAllAsync(r => r.InsituteBaseUrlId == endpoint.Id);
+            var resourceStatuses = await _resourceStatusRepository.GetAllAsync(r => r.InstituteBaseUrlId == endpoint.Id);
 
             var resourceDtos = resourceStatuses.Select(r => new ResourceStatusDto(
                 r.ResourceName,

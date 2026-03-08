@@ -11,25 +11,29 @@ namespace API.BackgroundServices
     {
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            logger.LogInformation("FHIR Validation Consumer Service started.");
+            logger.LogInformation("FHIR Validation Consumer Service starting...");
 
-            while (!stoppingToken.IsCancellationRequested)
+            try
             {
-                try
-                {
-                    using var scope = serviceProvider.CreateScope();
+                using var scope = serviceProvider.CreateScope();
+                var fhirValidationService = scope.ServiceProvider.GetRequiredService<FhirValidationService>();
 
-                    var fhirValidationService = scope.ServiceProvider.GetRequiredService<FhirValidationService>();
+                logger.LogInformation("Attempting to connect to RabbitMQ...");
 
-                    await _consumer.StartAsync<FhirEndpointValidationMessage>(
-                        "fhir-validation-queue",
-                        async (message) =>
+                await _consumer.StartAsync<FhirEndpointValidationMessage>(
+                    "fhir-validation-queue",
+                    async (message) =>
+                    {
+                        try
                         {
+                            using var messageScope = serviceProvider.CreateScope();
+                            var scopedFhirService = messageScope.ServiceProvider.GetRequiredService<FhirValidationService>();
+
                             logger.LogInformation(
                                 "Processing FHIR validation for endpoint {EndpointId}",
                                 message.EndpointId);
 
-                            await fhirValidationService.ValidateEndpointAsync(
+                            await scopedFhirService.ValidateEndpointAsync(
                                 message.EndpointId,
                                 message.BaseUrl,
                                 message.SupportedResources,
@@ -38,17 +42,27 @@ namespace API.BackgroundServices
                             logger.LogInformation(
                                 "Completed FHIR validation for endpoint {EndpointId}",
                                 message.EndpointId);
-                        });
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(ex,
+                                "Error processing FHIR validation for endpoint {EndpointId}",
+                                message.EndpointId);
+                        }
+                    });
 
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Error in FHIR Validation Consumer Service");
-                    await System.Threading.Tasks.Task.Delay(5000, stoppingToken);
-                }
+                logger.LogInformation("Successfully connected to RabbitMQ. FHIR Validation Consumer Service is running.");
+
+                // Keep the service running until cancellation is requested
+                await Task.Delay(Timeout.Infinite, stoppingToken);
             }
-
-            logger.LogInformation("FHIR Validation Consumer Service stopped.");
+            catch (Exception ex)
+            {
+                logger.LogError(ex,
+                    "Fatal error in FHIR Validation Consumer Service. " +
+                    "Please ensure RabbitMQ is running at localhost:5672");
+                throw; // Let the host handle the failure
+            }
         }
     }
 }

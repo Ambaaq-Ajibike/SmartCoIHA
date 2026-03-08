@@ -11,8 +11,8 @@ namespace Domain.Entities
         public Guid RequestingInstitutionId { get; private set; } = requestingInstitutionId;
         public string InstitutePatientId { get; private set; } = institutePatientId;
         public string ResourceType { get; private set; } = resourceType;
-        public DateTime RequestedTimestamp { get; private set; } = DateTime.Now;
-        public DateTime ExpiryTimestamp { get; private set; } = DateTime.Now + TimeSpan.FromHours(2);
+        public DateTime RequestedTimestamp { get; private set; } = DateTime.UtcNow;
+        public DateTime ExpiryTimestamp { get; private set; } = DateTime.UtcNow + TimeSpan.FromHours(2);
         public VerificationStatus InstitutionApprovedStatus { get; private set; } = VerificationStatus.Pending;
         public bool FingerprintValidationSuccess { get; private set; } = false;
 

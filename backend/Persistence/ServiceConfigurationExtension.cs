@@ -8,6 +8,8 @@ using Persistence.Data;
 using Persistence.Data.Repositories;
 using Persistence.EmailServices;
 using Persistence.Messaging;
+using Persistence.Services;
+using StackExchange.Redis;
 
 namespace Persistence
 {
@@ -27,6 +29,14 @@ namespace Persistence
 
             services.AddScoped<IEmailService, BrevoEmailService>();
             services.AddScoped<IEmailService, BrevoEmailService>();
+
+            var redisConnection = configuration.GetConnectionString("Redis");
+
+            services.AddSingleton<IConnectionMultiplexer>(
+                ConnectionMultiplexer.Connect(redisConnection)
+            );
+
+            services.AddScoped<ICacheService, RedisCacheService>();
         }
     }
 }

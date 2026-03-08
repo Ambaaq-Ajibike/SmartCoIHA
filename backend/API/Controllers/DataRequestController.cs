@@ -1,5 +1,6 @@
 using Application.Dtos;
 using Application.Services.Interfaces;
+using Hl7.Fhir.Model;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers
@@ -50,19 +51,33 @@ namespace API.Controllers
                 : BadRequest(response);
         }
 
-        [HttpPost("{requestId}/verify-fingerprint/{patientId}")]
+        [HttpPost("{requestId}/verify-fingerprint/{institutePatientId}")]
         [ProducesResponseType(typeof(BaseResponse<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(BaseResponse<bool>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> VerifyPatientFingerprint(
             Guid requestId,
-            Guid patientId,
+            string institutePatientId,
             [FromBody] VerifyFingerprintDto dto)
         {
             var response = await _dataRequestService.VerifyPatientFingerprintAsync(
                 requestId,
-                patientId,
+                institutePatientId,
                 dto.FingerprintTemplate);
+
+            return response.Success
+                ? Ok(response)
+                : BadRequest(response);
+        }
+
+        [HttpGet("{requestId}/resource-data")]
+        [ProducesResponseType(typeof(BaseResponse<Resource>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(BaseResponse<Resource>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(BaseResponse<Resource>), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetPatientResourceData(Guid requestId)
+        {
+            var response = await _dataRequestService.GetPatientResourceDataAsync(requestId);
 
             return response.Success
                 ? Ok(response)

@@ -17,5 +17,10 @@ namespace Domain.Entities
         {
             VerificationStatus = status;
         }
+
+        public async Task UpdateUrl(string url)
+        {
+            Url = url;
+        }
     }
 }

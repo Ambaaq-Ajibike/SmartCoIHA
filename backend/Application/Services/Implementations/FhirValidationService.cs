@@ -58,7 +58,7 @@ namespace Application.Services.Implementations
             {
                 // Get the resource status record
                 var resourceStatus = await _resourceStatusRepository.GetByExpressionAsync(
-                    r => r.InsituteBaseUrlId == endpointId && r.ResourceName == resourceName);
+                    r => r.InstituteBaseUrlId == endpointId && r.ResourceName == resourceName);
 
                 if (resourceStatus == null)
                 {
@@ -71,7 +71,7 @@ namespace Application.Services.Implementations
                 {
                     Timeout = 30000, // 30 seconds
                     PreferredFormat = ResourceFormat.Json,
-                    VerifyFhirVersion = true
+                    VerifyFhirVersion = false
                 };
 
                 var client = new FhirClient(baseUrl, settings);
@@ -186,7 +186,7 @@ namespace Application.Services.Implementations
         private async System.Threading.Tasks.Task MarkResourceFailed(Guid endpointId, string resourceName, string errorMessage)
         {
             var resourceStatus = await _resourceStatusRepository.GetByExpressionAsync(
-                r => r.InsituteBaseUrlId == endpointId && r.ResourceName == resourceName);
+                r => r.InstituteBaseUrlId == endpointId && r.ResourceName == resourceName);
 
             if (resourceStatus != null)
             {

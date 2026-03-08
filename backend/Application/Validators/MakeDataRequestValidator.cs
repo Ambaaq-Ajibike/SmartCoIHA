@@ -11,7 +11,7 @@ namespace Application.Validators
                 .NotEmpty()
                 .WithMessage("Requesting institution ID is required.");
 
-            RuleFor(x => x.PatientId)
+            RuleFor(x => x.InstitutePatientId)
                 .NotEmpty()
                 .WithMessage("Patient ID is required.")
                 .WithMessage("Patient ID must be a valid GUID format.");

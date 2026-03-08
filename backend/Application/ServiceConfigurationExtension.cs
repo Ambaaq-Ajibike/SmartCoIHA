@@ -11,6 +11,7 @@ namespace Application
             services.AddScoped<IInstitutionService, InstitutionService>();
             services.AddScoped<IPatientService, PatientService>();
             services.AddScoped<IFHIREndpointService, FHIREndpointService>();
+            services.AddScoped<IDataRequestService, DataRequestService>();
             services.AddScoped<FhirValidationService>();
         }
     }

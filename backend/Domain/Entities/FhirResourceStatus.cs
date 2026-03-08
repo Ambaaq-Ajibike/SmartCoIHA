@@ -6,7 +6,7 @@
         public string ResourceName { get; private set; } = resourceName;
         public bool IsVerified { get; private set; } = false;
         public string? ErrorMessage { get; private set; }
-        public Guid InsituteBaseUrlId { get; private set; } = instituteBaseUrlId;
+        public Guid InstituteBaseUrlId { get; private set; } = instituteBaseUrlId;
         public InstituteBaserUrl InstituteBaseUrl { get; private set; } = null!;
 
         public void MarkVerified()

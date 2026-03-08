@@ -13,7 +13,8 @@ namespace Application.Services.Implementations
         IGenericRepository<DataRequest> _dataRequestRepository,
         IGenericRepository<Patients> _patientRepository,
         IGenericRepository<InstituteBaserUrl> _endpointRepository,
-        IGenericRepository<Institution> _institutionRepository) : IDataRequestService
+        IGenericRepository<Institution> _institutionRepository,
+        ICacheService _cacheService) : IDataRequestService
     {
         public async Task<BaseResponse<Guid>> MakeDataRequestAsync(MakeDataRequestDto dataRequestDto)
         {
@@ -39,7 +40,7 @@ namespace Application.Services.Implementations
             }
 
             // Validate patient exists
-            var patient = await _patientRepository.GetByExpressionAsync(x => x.InstitutePatientId == dataRequestDto.PatientId);
+            var patient = await _patientRepository.GetByExpressionAsync(x => x.InstitutePatientId == dataRequestDto.InstitutePatientId);
             if (patient == null)
             {
                 return new BaseResponse<Guid>(
@@ -60,7 +61,7 @@ namespace Application.Services.Implementations
             // Create data request
             var dataRequest = new DataRequest(
                 dataRequestDto.RequestingInstitutionId,
-                dataRequestDto.PatientId,
+                dataRequestDto.InstitutePatientId,
                 dataRequestDto.ResourceType);
 
             var createdRequest = await _dataRequestRepository.AddAsync(dataRequest);
@@ -165,7 +166,7 @@ namespace Application.Services.Implementations
                 true);
         }
 
-        public async Task<BaseResponse<bool>> VerifyPatientFingerprintAsync(Guid requestId, Guid patientId, string fingerprintTemplate)
+        public async Task<BaseResponse<bool>> VerifyPatientFingerprintAsync(Guid requestId, string institutePatientId, string fingerprintTemplate)
         {
             // Validate fingerprint template
             if (string.IsNullOrWhiteSpace(fingerprintTemplate))
@@ -197,7 +198,7 @@ namespace Application.Services.Implementations
 
 
             // Get patient
-            var patient = await _patientRepository.GetByIdAsync(patientId);
+            var patient = await _patientRepository.GetByExpressionAsync(p => p.InstitutePatientId.ToLower() == institutePatientId);
             if (patient == null)
             {
                 return new BaseResponse<bool>(
@@ -227,7 +228,7 @@ namespace Application.Services.Implementations
             bool isValid = PatientService.VerifyFingerprintTemplate(
                 fingerprintTemplate,
                 patient.FingerPrint,
-                patientId);
+                patient.ID);
 
             if (!isValid)
             {
@@ -310,13 +311,26 @@ namespace Application.Services.Implementations
                     null);
             }
 
+            // Generate cache key based on patient ID and resource type
+            var cacheKey = $"fhir_resource:{dataRequest.InstitutePatientId}:{dataRequest.ResourceType.ToLower()}";
+
+            // Check if data exists in cache
+            var cachedResource = await _cacheService.GetAsync<Resource>(cacheKey);
+            if (cachedResource != null)
+            {
+                return new BaseResponse<Resource>(
+                    true,
+                    "Patient resource data retrieved successfully from cache.",
+                    cachedResource);
+            }
+
             // Get FHIR endpoint for the institution
-            var endpointResult = await GetInstitutionFhirEndpointAsync(patient.InstitutionID);
-            if (!endpointResult.IsSuccess)
+            var (IsSuccess, BaseUrl, ErrorMessage) = await GetInstitutionFhirEndpointAsync(patient.InstitutionID);
+            if (!IsSuccess)
             {
                 return new BaseResponse<Resource>(
                     false,
-                    endpointResult.ErrorMessage!,
+                    ErrorMessage!,
                     null);
             }
 
@@ -324,7 +338,7 @@ namespace Application.Services.Implementations
             try
             {
                 var resourceData = await FetchFhirResourceDataAsync(
-                    endpointResult.BaseUrl!,
+                    BaseUrl!,
                     dataRequest.ResourceType,
                     dataRequest.InstitutePatientId);
 
@@ -335,6 +349,10 @@ namespace Application.Services.Implementations
                         $"No {dataRequest.ResourceType} data found for the patient.",
                        null);
                 }
+
+                // Cache the resource data for 2 hours
+                var cacheExpiration = TimeSpan.FromHours(2);
+                await _cacheService.SetAsync(cacheKey, resourceData, cacheExpiration);
 
                 return new BaseResponse<Resource>(
                     true,
