@@ -9,22 +9,6 @@ namespace API.Controllers
     [Produces("application/json")]
     public class InstitutionsController(IInstitutionService _institutionService) : ControllerBase
     {
-        [HttpPost]
-        [ProducesResponseType(typeof(BaseResponse<Guid>), StatusCodes.Status201Created)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> Register(RegisterInstitutionDto dto)
-        {
-            var response = await _institutionService.RegisterInstitutionAsync(dto);
-
-            if (!response.Success)
-            {
-                return BadRequest(response);
-            }
-
-            return CreatedAtAction(nameof(GetById), new { id = response.Data }, response);
-        }
-
         [HttpGet("{id}")]
         [ProducesResponseType(typeof(BaseResponse<InstitutionDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]

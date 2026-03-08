@@ -1,3 +1,4 @@
+using API.Attributes;
 using Application.Dtos;
 using Application.Services.Interfaces;
 using Hl7.Fhir.Model;
@@ -11,6 +12,7 @@ namespace API.Controllers
     public class DataRequestController(IDataRequestService _dataRequestService) : ControllerBase
     {
         [HttpPost]
+        [RequireInstitutionManager]
         [ProducesResponseType(typeof(BaseResponse<Guid>), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(BaseResponse<Guid>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
@@ -37,6 +39,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{requestId}/approval-status")]
+        [RequireInstitutionManager]
         [ProducesResponseType(typeof(BaseResponse<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(BaseResponse<bool>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
