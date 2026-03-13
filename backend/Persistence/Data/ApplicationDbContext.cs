@@ -12,6 +12,6 @@ namespace Persistence.Data
         public DbSet<User> Users { get; set; }
         public DbSet<InstitutionManager> InstitutionManagers { get; set; }
         public DbSet<FhirResourceStatus> FhirResourceStatuses { get; set; }
-
+        public DbSet<AuditLog> AuditLogs { get; set; }
     }
 }
