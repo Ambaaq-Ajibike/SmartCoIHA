@@ -5,7 +5,7 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    // [Authorize(Roles = "Admin")] // Recommend enabling this to restrict access to Admins only
+    // [Authorize(Roles = "Admin")] 
     public class AdminAnalyticsController(IAdminAnalyticsService _adminAnalyticsService) : ControllerBase
     {
         /// <summary>

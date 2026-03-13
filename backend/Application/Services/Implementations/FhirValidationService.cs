@@ -3,12 +3,14 @@ using Domain.Entities;
 using Domain.Enums;
 using Hl7.Fhir.Model;
 using Hl7.Fhir.Rest;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Services.Implementations
 {
     public class FhirValidationService(
         IGenericRepository<InstituteBaserUrl> _endpointRepository,
-        IGenericRepository<FhirResourceStatus> _resourceStatusRepository)
+        IGenericRepository<FhirResourceStatus> _resourceStatusRepository,
+        ILogger<FhirValidationService> _logger)
     {
         public async System.Threading.Tasks.Task ValidateEndpointAsync(
             Guid endpointId,
@@ -16,10 +18,13 @@ namespace Application.Services.Implementations
             List<string> supportedResources,
             Guid testingPatientId)
         {
+            _logger.LogInformation("Starting FHIR endpoint validation. EndpointId: {EndpointId}, BaseUrl: {BaseUrl}, PatientId: {TestingPatientId}",
+                endpointId, baseUrl, testingPatientId);
+
             var endpoint = await _endpointRepository.GetByIdAsync(endpointId);
             if (endpoint == null)
             {
-                Console.WriteLine($"Endpoint {endpointId} not found.");
+                _logger.LogWarning("Validation aborted. Endpoint {EndpointId} not found.", endpointId);
                 return;
             }
 
@@ -27,6 +32,8 @@ namespace Application.Services.Implementations
 
             foreach (var resourceName in supportedResources)
             {
+                _logger.LogInformation("Validating resource: {ResourceName} against EndpointId: {EndpointId}", resourceName, endpointId);
+
                 var isValid = await ValidateResourceAsync(
                     endpointId,
                     baseUrl,
@@ -35,6 +42,7 @@ namespace Application.Services.Implementations
 
                 if (!isValid)
                 {
+                    _logger.LogWarning("Resource validation failed for {ResourceName}. EndpointId: {EndpointId}", resourceName, endpointId);
                     allResourcesValid = false;
                 }
             }
@@ -42,10 +50,11 @@ namespace Application.Services.Implementations
             // Update overall endpoint verification status
             var finalStatus = allResourcesValid ? VerificationStatus.Verified : VerificationStatus.Failed;
             await endpoint.UpdateVerificationStatus(finalStatus);
+
             _endpointRepository.Update(endpoint);
             await _endpointRepository.SaveChangesAsync();
 
-            Console.WriteLine($"Endpoint {endpointId} validation completed. Status: {finalStatus}");
+            _logger.LogInformation("Endpoint {EndpointId} validation completed. Final Status: {FinalStatus}", endpointId, finalStatus);
         }
 
         private async Task<bool> ValidateResourceAsync(
@@ -62,7 +71,7 @@ namespace Application.Services.Implementations
 
                 if (resourceStatus == null)
                 {
-                    Console.WriteLine($"Resource status not found for {resourceName}");
+                    _logger.LogWarning("Resource status tracking record not found for {ResourceName} on EndpointId: {EndpointId}", resourceName, endpointId);
                     return false;
                 }
 
@@ -94,12 +103,12 @@ namespace Application.Services.Implementations
                 if (isValid)
                 {
                     resourceStatus.MarkVerified();
-                    Console.WriteLine($"✓ {resourceName} resource validated successfully");
+                    _logger.LogInformation("Successfully validated resource type: {ResourceName} for EndpointId: {EndpointId}", resourceName, endpointId);
                 }
                 else
                 {
                     resourceStatus.MarkFailed("Resource validation failed: No valid data returned");
-                    Console.WriteLine($"✗ {resourceName} resource validation failed");
+                    _logger.LogWarning("Validation returned no valid data for resource type: {ResourceName} on EndpointId: {EndpointId}", resourceName, endpointId);
                 }
 
                 _resourceStatusRepository.Update(resourceStatus);
@@ -109,14 +118,16 @@ namespace Application.Services.Implementations
             }
             catch (FhirOperationException ex)
             {
+                _logger.LogError(ex, "FHIR operation error while validating {ResourceName} for EndpointId: {EndpointId}. Message: {ErrorMessage}",
+                    resourceName, endpointId, ex.Message);
                 await MarkResourceFailed(endpointId, resourceName, $"FHIR error: {ex.Message}");
-                Console.WriteLine($"✗ {resourceName} FHIR error: {ex.Message}");
                 return false;
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "System error while validating {ResourceName} for EndpointId: {EndpointId}. Message: {ErrorMessage}",
+                    resourceName, endpointId, ex.Message);
                 await MarkResourceFailed(endpointId, resourceName, $"Error: {ex.Message}");
-                Console.WriteLine($"✗ {resourceName} validation error: {ex.Message}");
                 return false;
             }
         }
@@ -193,6 +204,9 @@ namespace Application.Services.Implementations
                 resourceStatus.MarkFailed(errorMessage);
                 _resourceStatusRepository.Update(resourceStatus);
                 await _resourceStatusRepository.SaveChangesAsync();
+
+                _logger.LogWarning("Marked resource {ResourceName} as Failed for EndpointId: {EndpointId}. Reason: {ErrorMessage}",
+                    resourceName, endpointId, errorMessage);
             }
         }
     }

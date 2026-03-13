@@ -9,6 +9,7 @@ using CsvHelper.Configuration;
 using Domain.Entities;
 using Domain.Enums;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Linq.Expressions;
 using System.Security.Cryptography;
@@ -19,16 +20,21 @@ namespace Application.Services.Implementations
     public class PatientService(
         IGenericRepository<Patients> _patientRepository,
         IGenericRepository<Institution> _institutionRepository,
-        IMessagePublisher _messagePublisher) : IPatientService
+        IMessagePublisher _messagePublisher,
+        ILogger<PatientService> _logger) : IPatientService
     {
         public async Task<BaseResponse<Guid>> RegsiterPatientAsync(RegisterPatientDto patientDto)
         {
+            _logger.LogInformation("Attempting to register patient: {PatientName} ({Email}) for Institution ID: {InstitutionId}",
+                patientDto.Name, patientDto.Email, patientDto.InstitutionId);
+
             var validator = new RegisterPatientValidator();
             var validationResult = await validator.ValidateAsync(patientDto);
 
             if (!validationResult.IsValid)
             {
                 var errors = string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage));
+                _logger.LogWarning("Patient registration validation failed for {Email}: {ValidationErrors}", patientDto.Email, errors);
                 return new BaseResponse<Guid>(false, errors, Guid.Empty);
             }
 
@@ -36,6 +42,7 @@ namespace Application.Services.Implementations
             var institution = await _institutionRepository.GetByIdAsync(patientDto.InstitutionId);
             if (institution == null)
             {
+                _logger.LogWarning("Patient registration failed. Institution ID: {InstitutionId} not found.", patientDto.InstitutionId);
                 return new BaseResponse<Guid>(false, $"Institution with ID {patientDto.InstitutionId} not found.", Guid.Empty);
             }
 
@@ -44,12 +51,18 @@ namespace Application.Services.Implementations
             var createdPatient = await _patientRepository.AddAsync(patient);
             await _patientRepository.SaveChangesAsync();
 
+            _logger.LogInformation("Successfully registered patient. Patient ID: {PatientId}, InstitutePatientId: {InstitutePatientId}",
+                createdPatient.ID, patientDto.InstitutePatientId);
+
             // Send email notification via RabbitMQ
             await SendEmailNotificationAsync(patientDto, createdPatient.ID.ToString(), institution.Name);
             return new BaseResponse<Guid>(true, "Patient registered successfully.", createdPatient.ID);
         }
+
         private async Task SendEmailNotificationAsync(RegisterPatientDto patientDto, string createdPatientId, string institutionName)
         {
+            _logger.LogInformation("Queueing welcome email notification for Patient ID: {PatientId} to {Email}", createdPatientId, patientDto.Email);
+
             var emailMessage = new EmailNotificationMessage
             {
                 To = patientDto.Email,
@@ -82,15 +95,17 @@ namespace Application.Services.Implementations
             };
 
             await _messagePublisher.PublishAsync(emailMessage, "email-queue");
-
         }
 
         public async Task<BaseResponse<PatientDto>> GetPatientByIdAsync(Guid patientId)
         {
+            _logger.LogInformation("Attempting to retrieve Patient ID: {PatientId}", patientId);
+
             var patient = await _patientRepository.GetByIdAsync(patientId);
 
             if (patient == null)
             {
+                _logger.LogWarning("Patient retrieval failed. Patient ID: {PatientId} not found.", patientId);
                 return new BaseResponse<PatientDto>(false, $"Patient with ID {patientId} not found.", null!);
             }
 
@@ -100,11 +115,15 @@ namespace Application.Services.Implementations
                 patient.Institution?.Name ?? "Unknown",
                 patient.EnrollmentStatus);
 
+            _logger.LogInformation("Successfully retrieved Patient: {PatientName} ({PatientId})", patient.Name, patientId);
             return new BaseResponse<PatientDto>(true, "Patient retrieved successfully.", patientDto);
         }
 
         public async Task<BaseResponse<IEnumerable<PatientDto>>> GetPatientsAsync(string? institutionId, VerificationStatus? enrollmentStatus)
         {
+            _logger.LogInformation("Attempting to retrieve patients. Filters -> InstitutionId: {InstitutionId}, EnrollmentStatus: {EnrollmentStatus}",
+                institutionId ?? "None", enrollmentStatus?.ToString() ?? "None");
+
             // Build the filter expression dynamically
             Expression<Func<Patients, bool>> filterExpression = p => true;
 
@@ -128,6 +147,7 @@ namespace Application.Services.Implementations
 
             if (!patients.Any())
             {
+                _logger.LogInformation("No patients found matching the provided criteria.");
                 return new BaseResponse<IEnumerable<PatientDto>>(
                     true,
                     "No patients found matching the criteria.",
@@ -140,10 +160,7 @@ namespace Application.Services.Implementations
                 patient.Institution?.Name ?? "Unknown",
                 patient.EnrollmentStatus));
 
-            // Note: The interface signature suggests returning a single PatientDto, but this should likely return IEnumerable<PatientDto>
-            // Returning the first patient for now to match the interface
-
-
+            _logger.LogInformation("Successfully retrieved {PatientCount} patient(s).", patients.Count);
             return new BaseResponse<IEnumerable<PatientDto>>(
                 true,
                 $"{patients.Count} patient(s) retrieved successfully.",
@@ -152,9 +169,12 @@ namespace Application.Services.Implementations
 
         public async Task<BaseResponse<bool>> AddFingerprintAsync(Guid patientId, string fingerprintTemplate)
         {
+            _logger.LogInformation("Attempting to add biometric fingerprint for Patient ID: {PatientId}", patientId);
+
             // Validate input
             if (string.IsNullOrWhiteSpace(fingerprintTemplate))
             {
+                _logger.LogWarning("Fingerprint addition failed. Provided template was empty for Patient ID: {PatientId}", patientId);
                 return new BaseResponse<bool>(false, "Fingerprint template cannot be empty.", false);
             }
 
@@ -162,6 +182,7 @@ namespace Application.Services.Implementations
             var patient = await _patientRepository.GetByIdAsync(patientId);
             if (patient == null)
             {
+                _logger.LogWarning("Fingerprint addition failed. Patient ID: {PatientId} not found.", patientId);
                 return new BaseResponse<bool>(false, $"Patient with ID {patientId} not found.", false);
             }
 
@@ -174,14 +195,20 @@ namespace Application.Services.Implementations
             _patientRepository.Update(patient);
             await _patientRepository.SaveChangesAsync();
 
+            _logger.LogInformation("Successfully added and hashed fingerprint for Patient ID: {PatientId}", patientId);
             return new BaseResponse<bool>(true, "Fingerprint added successfully.", true);
         }
+
         public async Task<BaseResponse<BulkUploadResultDto>> BulkUploadPatientsAsync(IFormFile csvFile, Guid institutionId)
         {
+            _logger.LogInformation("Attempting bulk patient upload for Institution ID: {InstitutionId}. File: {FileName} ({FileSize} bytes)",
+                institutionId, csvFile?.FileName, csvFile?.Length);
+
             // Validate institution exists upfront
             var institution = await _institutionRepository.GetByIdAsync(institutionId);
             if (institution == null)
             {
+                _logger.LogWarning("Bulk upload failed. Institution ID: {InstitutionId} not found.", institutionId);
                 return new BaseResponse<BulkUploadResultDto>(
                     false,
                     $"Institution with ID {institutionId} not found.",
@@ -192,6 +219,7 @@ namespace Application.Services.Implementations
             var (IsValid, ErrorMessage) = ValidateCsvFile(csvFile);
             if (!IsValid)
             {
+                _logger.LogWarning("Bulk upload failed due to file validation: {ErrorMessage}", ErrorMessage);
                 return new BaseResponse<BulkUploadResultDto>(
                     false,
                     ErrorMessage,
@@ -199,19 +227,24 @@ namespace Application.Services.Implementations
             }
 
             // Read and validate CSV
-            var csvReadResult = await ReadCsvFileAsync(csvFile);
+            var csvReadResult = await ReadCsvFileAsync(csvFile!);
             if (!csvReadResult.IsSuccess)
             {
+                _logger.LogWarning("Bulk upload failed while reading CSV: {ErrorMessage}", csvReadResult.ErrorMessage);
                 return new BaseResponse<BulkUploadResultDto>(
                     false,
                     csvReadResult.ErrorMessage!,
                     new BulkUploadResultDto(0, 0, 0, [csvReadResult.ErrorMessage!]));
             }
 
+            _logger.LogInformation("Successfully read CSV. Found {TotalRecords} records. Starting batch processing.", csvReadResult.Records!.Count);
+
             // Process patients in batches
             var result = await ProcessPatientBatchesAsync(csvReadResult.Records!, institutionId, institution);
 
             var message = $"Bulk upload completed: {result.SuccessCount} succeeded, {result.FailedCount} failed out of {result.TotalRecords} records.";
+            _logger.LogInformation(message);
+
             return new BaseResponse<BulkUploadResultDto>(true, message, result);
         }
 
@@ -393,7 +426,8 @@ namespace Application.Services.Implementations
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error sending email to {patient.Email}: {ex.Message}");
+                        // Using injected logger instead of Console.WriteLine
+                        _logger.LogError(ex, "Error enqueueing welcome email for {Email}", patient.Email);
                     }
                 }
             });

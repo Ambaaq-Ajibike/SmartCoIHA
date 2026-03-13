@@ -6,6 +6,7 @@ using Domain.Entities;
 using Domain.Enums;
 using Hl7.Fhir.Model;
 using Hl7.Fhir.Rest;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Services.Implementations
 {
@@ -14,10 +15,14 @@ namespace Application.Services.Implementations
         IGenericRepository<Patients> _patientRepository,
         IGenericRepository<InstituteBaserUrl> _endpointRepository,
         IGenericRepository<Institution> _institutionRepository,
-        ICacheService _cacheService) : IDataRequestService
+        ICacheService _cacheService,
+        ILogger<DataRequestService> _logger) : IDataRequestService
     {
         public async Task<BaseResponse<Guid>> MakeDataRequestAsync(MakeDataRequestDto dataRequestDto)
         {
+            _logger.LogInformation("Attempting to create Data Request. RequestingInstitutionId: {RequestingInstitutionId}, PatientId: {InstitutePatientId}, ResourceType: {ResourceType}",
+                dataRequestDto.RequestingInstitutionId, dataRequestDto.InstitutePatientId, dataRequestDto.ResourceType);
+
             // Validate using FluentValidation
             var validator = new MakeDataRequestValidator();
             var validationResult = await validator.ValidateAsync(dataRequestDto);
@@ -25,14 +30,15 @@ namespace Application.Services.Implementations
             if (!validationResult.IsValid)
             {
                 var errors = string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage));
+                _logger.LogWarning("Data Request validation failed: {ValidationErrors}", errors);
                 return new BaseResponse<Guid>(false, errors, Guid.Empty);
             }
-
 
             // Validate requesting institution exists
             var requestingInstitution = await _institutionRepository.GetByIdAsync(dataRequestDto.RequestingInstitutionId);
             if (requestingInstitution == null)
             {
+                _logger.LogWarning("Data request failed. Requesting Institution not found for ID: {RequestingInstitutionId}", dataRequestDto.RequestingInstitutionId);
                 return new BaseResponse<Guid>(
                     false,
                     "Requesting institution not found.",
@@ -43,6 +49,7 @@ namespace Application.Services.Implementations
             var patient = await _patientRepository.GetByExpressionAsync(x => x.InstitutePatientId == dataRequestDto.InstitutePatientId);
             if (patient == null)
             {
+                _logger.LogWarning("Data request failed. Patient not found for ID: {InstitutePatientId}", dataRequestDto.InstitutePatientId);
                 return new BaseResponse<Guid>(
                     false,
                     "Patient not found.",
@@ -52,6 +59,8 @@ namespace Application.Services.Implementations
             // Validate patient is enrolled and verified
             if (patient.EnrollmentStatus != VerificationStatus.Verified)
             {
+                _logger.LogWarning("Data request failed. Patient {InstitutePatientId} enrollment is not verified. Current Status: {EnrollmentStatus}",
+                    dataRequestDto.InstitutePatientId, patient.EnrollmentStatus);
                 return new BaseResponse<Guid>(
                     false,
                     "Patient enrollment is not verified. Data request cannot be made. Download the app to verify patient",
@@ -67,6 +76,8 @@ namespace Application.Services.Implementations
             var createdRequest = await _dataRequestRepository.AddAsync(dataRequest);
             await _dataRequestRepository.SaveChangesAsync();
 
+            _logger.LogInformation("Successfully created Data Request: {DataRequestId}", createdRequest.Id);
+
             return new BaseResponse<Guid>(
                 true,
                 "Data request created successfully. Awaiting institution approval and patient fingerprint verification.",
@@ -75,10 +86,13 @@ namespace Application.Services.Implementations
 
         public async Task<BaseResponse<IEnumerable<DataRequestDto>>> GetDataRequestsForInstitutionAsync(Guid institutionId)
         {
+            _logger.LogInformation("Attempting to get data requests for Institution ID: {InstitutionId}", institutionId);
+
             // Validate institution exists
             var institution = await _institutionRepository.GetByIdAsync(institutionId);
             if (institution == null)
             {
+                _logger.LogWarning("Failed to retrieve data requests. Institution ID: {InstitutionId} not found.", institutionId);
                 return new BaseResponse<IEnumerable<DataRequestDto>>(
                     false,
                     $"Institution not found.",
@@ -112,12 +126,14 @@ namespace Application.Services.Implementations
 
             if (requestDtos.Count == 0)
             {
+                _logger.LogInformation("No data requests found for Institution ID: {InstitutionId}", institutionId);
                 return new BaseResponse<IEnumerable<DataRequestDto>>(
                     true,
                     "No data requests found for this institution.",
                     []);
             }
 
+            _logger.LogInformation("Successfully retrieved {DataRequestCount} data request(s) for Institution ID: {InstitutionId}", requestDtos.Count, institutionId);
             return new BaseResponse<IEnumerable<DataRequestDto>>(
                 true,
                 $"{requestDtos.Count} data request(s) retrieved successfully.",
@@ -126,9 +142,12 @@ namespace Application.Services.Implementations
 
         public async Task<BaseResponse<bool>> UpdateInstitutionApprovalStatusAsync(Guid requestId, VerificationStatus newStatus)
         {
+            _logger.LogInformation("Attempting to update status for Data Request: {DataRequestId} to {VerificationStatus}", requestId, newStatus);
+
             // Validate status
             if (newStatus != VerificationStatus.Verified && newStatus != VerificationStatus.Denied)
             {
+                _logger.LogWarning("Status update failed for Data Request: {DataRequestId}. Invalid Status: {VerificationStatus}", requestId, newStatus);
                 return new BaseResponse<bool>(
                     false,
                     "Invalid status. Only 'Verified' or 'Rejected' statuses are allowed.",
@@ -139,6 +158,7 @@ namespace Application.Services.Implementations
             var dataRequest = await _dataRequestRepository.GetByIdAsync(requestId);
             if (dataRequest == null)
             {
+                _logger.LogWarning("Status update failed. Data Request: {DataRequestId} not found.", requestId);
                 return new BaseResponse<bool>(
                     false,
                     $"Data request not found.",
@@ -148,6 +168,7 @@ namespace Application.Services.Implementations
             // Check if request is expired
             if (dataRequest.IsExpired())
             {
+                _logger.LogWarning("Status update failed. Data Request: {DataRequestId} is expired.", requestId);
                 return new BaseResponse<bool>(
                     false,
                     "Data request has expired and cannot be updated.",
@@ -160,6 +181,8 @@ namespace Application.Services.Implementations
             await _dataRequestRepository.SaveChangesAsync();
 
             var statusText = newStatus == VerificationStatus.Verified ? "approved" : "rejected";
+            _logger.LogInformation("Successfully updated Data Request: {DataRequestId} to {VerificationStatus}", requestId, newStatus);
+
             return new BaseResponse<bool>(
                 true,
                 $"Data request {statusText} successfully.",
@@ -168,9 +191,12 @@ namespace Application.Services.Implementations
 
         public async Task<BaseResponse<bool>> VerifyPatientFingerprintAsync(Guid requestId, string institutePatientId, string fingerprintTemplate)
         {
+            _logger.LogInformation("Attempting to verify fingerprint for Data Request: {DataRequestId}, PatientId: {InstitutePatientId}", requestId, institutePatientId);
+
             // Validate fingerprint template
             if (string.IsNullOrWhiteSpace(fingerprintTemplate))
             {
+                _logger.LogWarning("Fingerprint verification failed. Empty template provided for Data Request: {DataRequestId}", requestId);
                 return new BaseResponse<bool>(
                     false,
                     "Fingerprint template is required.",
@@ -181,6 +207,7 @@ namespace Application.Services.Implementations
             var dataRequest = await _dataRequestRepository.GetByIdAsync(requestId);
             if (dataRequest == null)
             {
+                _logger.LogWarning("Fingerprint verification failed. Data Request: {DataRequestId} not found.", requestId);
                 return new BaseResponse<bool>(
                     false,
                     "Data request not found.",
@@ -190,25 +217,29 @@ namespace Application.Services.Implementations
             // Check if request is expired
             if (dataRequest.IsExpired())
             {
+                _logger.LogWarning("Fingerprint verification failed. Data Request: {DataRequestId} is expired.", requestId);
                 return new BaseResponse<bool>(
                     false,
                     "Data request has expired. Fingerprint verification not allowed.",
                     false);
             }
 
-
             // Get patient
             var patient = await _patientRepository.GetByExpressionAsync(p => p.InstitutePatientId.ToLower() == institutePatientId);
             if (patient == null)
             {
+                _logger.LogWarning("Fingerprint verification failed. Patient: {InstitutePatientId} not found.", institutePatientId);
                 return new BaseResponse<bool>(
                     false,
                     "Patient not found.",
                     false);
             }
+
             // Validate patient ID matches request
             if (dataRequest.InstitutePatientId != patient.InstitutePatientId)
             {
+                _logger.LogWarning("Fingerprint verification failed. Provided Patient: {InstitutePatientId} does not match request Patient: {RequestPatientId}",
+                    institutePatientId, dataRequest.InstitutePatientId);
                 return new BaseResponse<bool>(
                     false,
                     "Patient ID does not match the data request.",
@@ -218,6 +249,7 @@ namespace Application.Services.Implementations
             // Check if patient has fingerprint registered
             if (string.IsNullOrWhiteSpace(patient.FingerPrint))
             {
+                _logger.LogWarning("Fingerprint verification failed. Patient: {InstitutePatientId} has no registered fingerprint.", institutePatientId);
                 return new BaseResponse<bool>(
                     false,
                     "Patient does not have a registered fingerprint. Please register fingerprint first.",
@@ -232,6 +264,7 @@ namespace Application.Services.Implementations
 
             if (!isValid)
             {
+                _logger.LogWarning("Fingerprint verification failed due to mismatch for Patient: {InstitutePatientId}, Data Request: {DataRequestId}", institutePatientId, requestId);
                 return new BaseResponse<bool>(
                     false,
                     "Fingerprint verification failed. The provided fingerprint does not match the registered fingerprint.",
@@ -243,6 +276,7 @@ namespace Application.Services.Implementations
             _dataRequestRepository.Update(dataRequest);
             await _dataRequestRepository.SaveChangesAsync();
 
+            _logger.LogInformation("Successfully verified fingerprint and approved access for Data Request: {DataRequestId}", requestId);
             return new BaseResponse<bool>(
                 true,
                 "Patient fingerprint verified successfully. Data request is now approved for access.",
@@ -251,10 +285,13 @@ namespace Application.Services.Implementations
 
         public async Task<BaseResponse<Resource>> GetPatientResourceDataAsync(Guid requestId)
         {
+            _logger.LogInformation("Attempting to get resource data for Data Request: {DataRequestId}", requestId);
+
             // Get data request
             var dataRequest = await _dataRequestRepository.GetByIdAsync(requestId);
             if (dataRequest == null)
             {
+                _logger.LogWarning("Failed to get resource data. Data Request: {DataRequestId} not found.", requestId);
                 return new BaseResponse<Resource>(
                     false,
                     "Data request not found.",
@@ -264,6 +301,7 @@ namespace Application.Services.Implementations
             // Check if request has expired
             if (dataRequest.IsExpired())
             {
+                _logger.LogWarning("Failed to get resource data. Data Request: {DataRequestId} has expired.", requestId);
                 return new BaseResponse<Resource>(
                     false,
                     "Data request has expired. Please create a new request.",
@@ -273,6 +311,9 @@ namespace Application.Services.Implementations
             // Check if institution has approved the request
             if (dataRequest.InstitutionApprovedStatus != VerificationStatus.Verified)
             {
+                _logger.LogWarning("Failed to get resource data. Data Request: {DataRequestId} has status: {InstitutionApprovedStatus}",
+                    requestId, dataRequest.InstitutionApprovedStatus);
+
                 var statusMessage = dataRequest.InstitutionApprovedStatus == VerificationStatus.Denied
                     ? "Data request was rejected by the institution."
                     : "Data request is pending institution approval.";
@@ -286,6 +327,7 @@ namespace Application.Services.Implementations
             // Check if patient fingerprint has been validated
             if (!dataRequest.FingerprintValidationSuccess)
             {
+                _logger.LogWarning("Failed to get resource data. Fingerprint validation is missing for Data Request: {DataRequestId}", requestId);
                 return new BaseResponse<Resource>(
                     false,
                     "Patient fingerprint validation is required before accessing data.",
@@ -295,6 +337,7 @@ namespace Application.Services.Implementations
             var patient = await _patientRepository.GetByExpressionAsync(p => p.InstitutePatientId == dataRequest.InstitutePatientId);
             if (patient == null)
             {
+                _logger.LogWarning("Failed to get resource data. Patient: {InstitutePatientId} not found.", dataRequest.InstitutePatientId);
                 return new BaseResponse<Resource>(
                     false,
                     "Patient not found.",
@@ -305,6 +348,8 @@ namespace Application.Services.Implementations
             var institution = await _institutionRepository.GetByIdAsync(patient.InstitutionID);
             if (institution == null)
             {
+                _logger.LogWarning("Failed to get resource data. Institution ID: {InstitutionId} not found for Patient: {InstitutePatientId}",
+                    patient.InstitutionID, patient.InstitutePatientId);
                 return new BaseResponse<Resource>(
                     false,
                     "Patient's institution not found.",
@@ -318,16 +363,20 @@ namespace Application.Services.Implementations
             var cachedResource = await _cacheService.GetAsync<Resource>(cacheKey);
             if (cachedResource != null)
             {
+                _logger.LogInformation("Cache hit for resource query. Key: {CacheKey}", cacheKey);
                 return new BaseResponse<Resource>(
                     true,
                     "Patient resource data retrieved successfully from cache.",
                     cachedResource);
             }
 
+            _logger.LogInformation("Cache miss for resource query. Proceeding to fetch from FHIR endpoint for Key: {CacheKey}", cacheKey);
+
             // Get FHIR endpoint for the institution
             var (IsSuccess, BaseUrl, ErrorMessage) = await GetInstitutionFhirEndpointAsync(patient.InstitutionID);
             if (!IsSuccess)
             {
+                _logger.LogWarning("Failed to resolve FHIR endpoint for Institution ID: {InstitutionId}. Error: {ErrorMessage}", patient.InstitutionID, ErrorMessage);
                 return new BaseResponse<Resource>(
                     false,
                     ErrorMessage!,
@@ -337,6 +386,9 @@ namespace Application.Services.Implementations
             // Fetch resource data from FHIR endpoint
             try
             {
+                _logger.LogInformation("Fetching external FHIR data. ResourceType: {ResourceType}, BaseUrl: {BaseUrl}, PatientId: {PatientId}",
+                    dataRequest.ResourceType, BaseUrl, dataRequest.InstitutePatientId);
+
                 var resourceData = await FetchFhirResourceDataAsync(
                     BaseUrl!,
                     dataRequest.ResourceType,
@@ -344,6 +396,9 @@ namespace Application.Services.Implementations
 
                 if (resourceData is null)
                 {
+                    _logger.LogInformation("External FHIR fetch returned no data for ResourceType: {ResourceType}, PatientId: {PatientId}",
+                        dataRequest.ResourceType, dataRequest.InstitutePatientId);
+
                     return new BaseResponse<Resource>(
                         false,
                         $"No {dataRequest.ResourceType} data found for the patient.",
@@ -354,6 +409,8 @@ namespace Application.Services.Implementations
                 var cacheExpiration = TimeSpan.FromHours(2);
                 await _cacheService.SetAsync(cacheKey, resourceData, cacheExpiration);
 
+                _logger.LogInformation("Successfully fetched and cached FHIR resource data. Source Cached: {CacheKey}", cacheKey);
+
                 return new BaseResponse<Resource>(
                     true,
                     "Patient resource data retrieved successfully.",
@@ -361,6 +418,7 @@ namespace Application.Services.Implementations
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "An unexpected error occurred while fetching external FHIR data. DataRequestId: {DataRequestId}", requestId);
                 return new BaseResponse<Resource>(
                     false,
                     $"Error retrieving data from FHIR endpoint: {ex.Message}",
@@ -370,7 +428,6 @@ namespace Application.Services.Implementations
 
         private async Task<(bool IsSuccess, string? BaseUrl, string? ErrorMessage)> GetInstitutionFhirEndpointAsync(Guid institutionId)
         {
-
             var endpoint = await _endpointRepository.GetByExpressionAsync(e =>
                 e.InstitutionID == institutionId &&
                 e.VerificationStatus == VerificationStatus.Verified);
