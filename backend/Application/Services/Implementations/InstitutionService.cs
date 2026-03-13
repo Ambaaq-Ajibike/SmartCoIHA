@@ -2,6 +2,7 @@
 using Application.Repositories.Interfaces;
 using Application.Services.Interfaces;
 using Domain.Entities;
+using Domain.Enums;
 
 namespace Application.Services.Implementations
 {
@@ -48,9 +49,24 @@ namespace Application.Services.Implementations
 
             return new BaseResponse<IEnumerable<InstitutionDto>>(
                 true,
-                $"{institutions.Count} institution(s) retrieved successfully.",
+                "Institutions retrieved successfully.",
                 institutionDtos);
         }
 
+        public async Task<BaseResponse<bool>> UpdateInstitutionStatusAsync(Guid id, VerificationStatus status)
+        {
+            var institution = await _institutionRepository.GetByIdAsync(id);
+            if (institution == null)
+            {
+                return new BaseResponse<bool>(false, $"Institution not found.", false);
+            }
+
+            institution.UpdateVerificationStatus(status);
+
+            _institutionRepository.Update(institution);
+            await _institutionRepository.SaveChangesAsync();
+
+            return new BaseResponse<bool>(true, "Institution status updated successfully.", true);
+        }
     }
 }

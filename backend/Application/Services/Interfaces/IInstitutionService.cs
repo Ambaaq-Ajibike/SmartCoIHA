@@ -1,4 +1,5 @@
 ﻿using Application.Dtos;
+using Domain.Enums;
 
 namespace Application.Services.Interfaces
 {
@@ -6,5 +7,6 @@ namespace Application.Services.Interfaces
     {
         Task<BaseResponse<InstitutionDto>> GetInstitutionByIdAsync(Guid id);
         Task<BaseResponse<IEnumerable<InstitutionDto>>> GetAllInstitutionsAsync();
+        Task<BaseResponse<bool>> UpdateInstitutionStatusAsync(Guid id, VerificationStatus status);
     }
 }

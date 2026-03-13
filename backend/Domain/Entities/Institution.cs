@@ -12,5 +12,10 @@ namespace Domain.Entities
         public string Address { get; set; } = address ?? throw new ArgumentNullException(nameof(address));
         public List<InstituteBaserUrl> FhirEndpoints { get; private set; } = [];
         public VerificationStatus VerificationStatus { get; private set; } = VerificationStatus.Pending;
+
+        public void UpdateVerificationStatus(VerificationStatus status)
+        {
+            VerificationStatus = status;
+        }
     }
 }
