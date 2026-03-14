@@ -113,7 +113,7 @@ namespace Application.Services.Implementations
                 patient.Name,
                 patient.Email,
                 patient.Institution?.Name ?? "Unknown",
-                patient.EnrollmentStatus);
+                patient.EnrollmentStatus.ToString());
 
             _logger.LogInformation("Successfully retrieved Patient: {PatientName} ({PatientId})", patient.Name, patientId);
             return new BaseResponse<PatientDto>(true, "Patient retrieved successfully.", patientDto);
@@ -158,7 +158,7 @@ namespace Application.Services.Implementations
                 patient.Name,
                 patient.Email,
                 patient.Institution?.Name ?? "Unknown",
-                patient.EnrollmentStatus));
+                patient.EnrollmentStatus.ToString()));
 
             _logger.LogInformation("Successfully retrieved {PatientCount} patient(s).", patients.Count);
             return new BaseResponse<IEnumerable<PatientDto>>(
