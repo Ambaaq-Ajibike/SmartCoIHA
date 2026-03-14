@@ -5,11 +5,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, BadgeCheck, LoaderCircle, ShieldCheck } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { registerManager } from "@/features/auth/services/register-manager";
 import {
   registerInstitutionSchema,
   type RegisterInstitutionInput,
 } from "@/features/auth/types/register-institution";
+import { registerManager } from "../services/authService";
 
 const fieldClassName =
   "mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-primary focus:ring-4 focus:ring-emerald-100";
