@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Building2, UserRound, LogOut, ChevronUp } from "lucide-react";
+import { LayoutDashboard, Building2, UserRound, FolderSearch, LogOut, ChevronUp } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 
 const navItems = [
   { href: "/dashboard/manager", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard/manager/data-requests", label: "Data Requests", icon: FolderSearch },
   { href: "/dashboard/manager/profile", label: "Profile", icon: UserRound },
 ];
 
