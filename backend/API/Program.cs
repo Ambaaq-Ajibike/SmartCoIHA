@@ -28,6 +28,17 @@ try
     // Replace the default standard .NET logging with Serilog
     builder.Host.UseSerilog();
 
+    // Configure CORS
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("AllowAll", policy =>
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+    });
+
     // 2. Configure OpenTelemetry for Tracing and Metrics
     builder.Services.AddOpenTelemetry()
         .ConfigureResource(resource => resource.AddService("SmartCoIHA.API"))
@@ -54,7 +65,6 @@ try
     builder.Services.AddApplicationServices();
     builder.Services.AddHostedService<RabbitMqConsumerService>();
     builder.Services.AddHostedService<FhirValidationConsumerService>();
-
 
     // Configure JWT Authentication
     var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -100,23 +110,6 @@ try
             In = ParameterLocation.Header,
             Description = "Enter your JWT token below. Example: Bearer {your token}"
         });
-
-        //options.AddSecurityRequirement(new OpenApiSecurityRequirement
-        //{
-        //    {
-        //        new OpenApiSecuritySchemeReference("Bearer")
-        //        {
-
-        //            Reference = new OpenApiReferenceWithDescription
-        //            {
-        //                Type = ReferenceType.SecurityScheme,
-        //                Id = "Bearer"
-        //            }
-        //        },
-        //        []
-        //    }
-        //});
-
     });
 
     builder.Services.AddOpenApi();
@@ -136,6 +129,9 @@ try
     app.UseSwaggerUI();
     app.UseMiddleware<ExceptionHandlingMiddleware>();
     app.UseHttpsRedirection();
+
+    // ENABLE CORS (Must be before Authentication/Authorization)
+    app.UseCors("AllowAll");
 
     app.UseAuthentication();
     app.UseAuthorization();

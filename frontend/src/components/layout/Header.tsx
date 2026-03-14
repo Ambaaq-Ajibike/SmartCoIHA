@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 
@@ -9,13 +10,13 @@ type NavLink = {
 };
 
 const navLinks: NavLink[] = [
-  { label: "Home", href: "#home" },
-  { label: "How It Works", href: "#how-it-works" },
-  { label: "Features", href: "#features" },
-  { label: "Security", href: "#security" },
-  { label: "For Institutions", href: "#for-institutions" },
-  { label: "For Patients", href: "#for-patients" },
-  { label: "Contact", href: "#contact" },
+  { label: "Home", href: "/#home" },
+  { label: "How It Works", href: "/#how-it-works" },
+  { label: "Features", href: "/#features" },
+  { label: "Security", href: "/#security" },
+  { label: "For Institutions", href: "/#for-institutions" },
+  { label: "For Patients", href: "/#for-patients" },
+  { label: "Contact", href: "/#contact" },
 ];
 
 export default function Header() {
@@ -44,8 +45,8 @@ export default function Header() {
         aria-label="Primary"
         className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-5 lg:px-8"
       >
-        <a
-          href="#home"
+        <Link
+          href="/"
           className="flex items-center gap-2 text-lg font-semibold tracking-tight text-primary"
           aria-label="SmartCoIHA home"
         >
@@ -53,33 +54,33 @@ export default function Header() {
             S
           </span>
           SmartCoIHA
-        </a>
+        </Link>
 
         <div className="hidden items-center gap-7 md:flex">
           {navLinks.map((link) => (
-            <a
+            <Link
               key={link.href}
               href={link.href}
               className="text-sm font-medium text-slate-700 transition-colors hover:text-primary"
             >
               {link.label}
-            </a>
+            </Link>
           ))}
         </div>
 
         <div className="hidden items-center gap-3 md:flex">
-          <a
-            href="#"
+          <Link
+            href="/login"
             className="rounded-full px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:text-primary"
           >
             Login
-          </a>
-          <a
-            href="#"
+          </Link>
+          <Link
+            href="/register-institution"
             className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800"
           >
             Register Institution
-          </a>
+          </Link>
         </div>
 
         <button
@@ -101,31 +102,31 @@ export default function Header() {
         >
           <div className="flex flex-col gap-2">
             {navLinks.map((link) => (
-              <a
+              <Link
                 key={link.href}
                 href={link.href}
                 className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-emerald-50 hover:text-primary"
                 onClick={closeMobile}
               >
                 {link.label}
-              </a>
+              </Link>
             ))}
           </div>
           <div className="mt-4 grid gap-2">
-            <a
-              href="#"
+            <Link
+              href="/login"
               className="rounded-full border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-700"
               onClick={closeMobile}
             >
               Login
-            </a>
-            <a
-              href="#"
+            </Link>
+            <Link
+              href="/register-institution"
               className="rounded-full bg-primary px-4 py-2 text-center text-sm font-semibold text-white"
               onClick={closeMobile}
             >
               Register Institution
-            </a>
+            </Link>
           </div>
         </div>
       )}

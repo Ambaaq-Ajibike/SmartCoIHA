@@ -1,8 +1,10 @@
+import Link from "next/link";
+
 const platformLinks = [
-  { label: "Home", href: "#home" },
-  { label: "How It Works", href: "#how-it-works" },
-  { label: "Features", href: "#features" },
-  { label: "Security", href: "#security" },
+  { label: "Home", href: "/#home" },
+  { label: "How It Works", href: "/#how-it-works" },
+  { label: "Features", href: "/#features" },
+  { label: "Security", href: "/#security" },
 ];
 
 const resourceLinks = [
@@ -18,15 +20,17 @@ const legalLinks = [
 
 const contactLinks = [
   { label: "Email", href: "mailto:support@smartcoiha.com" },
-  { label: "Support", href: "#contact" },
+  { label: "Support", href: "/#contact" },
 ];
 
 function FooterColumn({
   title,
   links,
+  useLink = false,
 }: {
   title: string;
   links: Array<{ label: string; href: string }>;
+  useLink?: boolean;
 }) {
   return (
     <div>
@@ -34,12 +38,21 @@ function FooterColumn({
       <ul className="mt-4 space-y-3">
         {links.map((link) => (
           <li key={link.label}>
-            <a
-              href={link.href}
-              className="text-sm text-slate-300 transition-colors hover:text-white"
-            >
-              {link.label}
-            </a>
+            {useLink ? (
+              <Link
+                href={link.href}
+                className="text-sm text-slate-300 transition-colors hover:text-white"
+              >
+                {link.label}
+              </Link>
+            ) : (
+              <a
+                href={link.href}
+                className="text-sm text-slate-300 transition-colors hover:text-white"
+              >
+                {link.label}
+              </a>
+            )}
           </li>
         ))}
       </ul>
@@ -65,10 +78,10 @@ export default function Footer() {
           </p>
         </div>
 
-        <FooterColumn title="Platform" links={platformLinks} />
+        <FooterColumn title="Platform" links={platformLinks} useLink />
         <FooterColumn title="Resources" links={resourceLinks} />
         <FooterColumn title="Legal" links={legalLinks} />
-        <FooterColumn title="Contact" links={contactLinks} />
+        <FooterColumn title="Contact" links={contactLinks} useLink />
       </div>
 
       <div className="border-t border-slate-800">
