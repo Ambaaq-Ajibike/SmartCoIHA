@@ -201,10 +201,6 @@ export default function RegisterInstitutionForm() {
         <h3 className="font-display mt-6 text-3xl font-semibold tracking-tight">
           Register once, then continue with verification and FHIR setup.
         </h3>
-        <p className="mt-4 text-sm leading-7 text-slate-300 sm:text-base">
-          This form creates the institution manager account against the backend endpoint at
-          <span className="font-medium text-white"> https://localhost:7103/api/Auth/register-manager</span>.
-        </p>
 
         <div className="mt-8 space-y-3">
           {institutionHighlights.map((item) => (
