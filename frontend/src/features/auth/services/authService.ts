@@ -2,6 +2,7 @@ import type { VerifyEmailInput } from "@/features/auth/types/verify-email";
 import { getApiErrorMessage, getApiSuccessMessage, post } from "@/lib/api-request";
 import { RegisterInstitutionInput } from "@/features/auth/types/register-institution";
 import type { LoginInput } from "@/features/auth/types/login";
+import type { AuthUser } from "@/store/useAuthStore";
 
 const registerManagerUrl = "/api/Auth/register-manager";
 
@@ -47,7 +48,8 @@ const loginUrl = "/api/Auth/login";
 
 export type LoginResult = {
     message: string;
-    token?: string;
+    token: string;
+    user: AuthUser;
 };
 
 export async function login(payload: LoginInput): Promise<LoginResult> {
@@ -58,36 +60,33 @@ export async function login(payload: LoginInput): Promise<LoginResult> {
             },
         });
 
+        const data = getObjectValue(response, "data") ?? (response as Record<string, unknown>);
+        const token = getStringValue(data, "token")
+            || getStringValue(data, "accessToken")
+            || getStringValue(data, "jwt");
+
+        if (!token) {
+            throw new Error("Authentication token not received from server.");
+        }
+
+        const user: AuthUser = {
+            email: getStringValue(data, "email") ?? "",
+            fullName: getStringValue(data, "fullName") ?? "",
+            role: (getStringValue(data, "role") ?? "InstitutionManager") as AuthUser["role"],
+            isEmailVerified: getBoolValue(data, "isEmailVerified"),
+            isInstitutionVerified: getBoolValue(data, "isInstitutionVerified"),
+            institutionId: getStringValue(data, "institutionId") ?? null,
+            institutionName: getStringValue(data, "institutionName") ?? null,
+        };
+
         return {
             message: getApiSuccessMessage(response, "Login successful."),
-            token: getAuthToken(response),
+            token,
+            user,
         };
     } catch (error) {
         throw new Error(getApiErrorMessage(error));
     }
-}
-
-function getAuthToken(responseData: unknown): string | undefined {
-    if (!responseData || typeof responseData !== "object") {
-        return undefined;
-    }
-
-    const rootToken = getStringValue(responseData, "token")
-        || getStringValue(responseData, "accessToken")
-        || getStringValue(responseData, "jwt");
-
-    if (rootToken) {
-        return rootToken;
-    }
-
-    const nestedData = getObjectValue(responseData, "data");
-    if (!nestedData) {
-        return undefined;
-    }
-
-    return getStringValue(nestedData, "token")
-        || getStringValue(nestedData, "accessToken")
-        || getStringValue(nestedData, "jwt");
 }
 
 function getStringValue(source: unknown, key: string): string | undefined {
@@ -101,6 +100,15 @@ function getStringValue(source: unknown, key: string): string | undefined {
     }
 
     return undefined;
+}
+
+function getBoolValue(source: unknown, key: string): boolean {
+    if (!source || typeof source !== "object") {
+        return false;
+    }
+
+    const value = (source as Record<string, unknown>)[key];
+    return value === true || value === "True" || value === "true";
 }
 
 function getObjectValue(source: unknown, key: string): Record<string, unknown> | undefined {

@@ -3,17 +3,19 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, BadgeCheck, LoaderCircle, LockKeyhole } from "lucide-react";
+import { ArrowRight, LoaderCircle, LockKeyhole } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { login } from "@/features/auth/services/authService";
 import { loginSchema, type LoginInput } from "@/features/auth/types/login";
+import { useAuthStore } from "@/store/useAuthStore";
 
 const fieldClassName =
   "mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-primary focus:ring-4 focus:ring-emerald-100";
 
 export default function LoginForm() {
   const router = useRouter();
+  const setAuth = useAuthStore((s) => s.setAuth);
 
   const {
     register,
@@ -31,15 +33,13 @@ export default function LoginForm() {
     try {
       const result = await login(values);
 
-      if (result.token) {
-        window.localStorage.setItem("auth_token", result.token);
-      }
+      setAuth(result.user, result.token);
 
       toast.success(result.message, {
         duration: 5000,
       });
 
-      router.push("/");
+      router.push("/dashboard");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Login failed.";
       toast.error(message, {
