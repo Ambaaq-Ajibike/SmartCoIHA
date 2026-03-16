@@ -3,12 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Building2, UserRound, FolderSearch, Users, LogOut, ChevronUp } from "lucide-react";
+import { LayoutDashboard, Building2, UserRound, FolderSearch, Globe, Users, LogOut, ChevronUp } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 
 const navItems = [
   { href: "/dashboard/manager", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/manager/patients", label: "Patients", icon: Users },
+  { href: "/dashboard/manager/fhir-endpoints", label: "FHIR Endpoints", icon: Globe },
   { href: "/dashboard/manager/data-requests", label: "Data Requests", icon: FolderSearch },
   { href: "/dashboard/manager/profile", label: "Profile", icon: UserRound },
 ];

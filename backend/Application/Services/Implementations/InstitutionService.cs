@@ -63,6 +63,31 @@ namespace Application.Services.Implementations
                 "Institutions retrieved successfully.",
                 institutionDtos);
         }
+        public async Task<BaseResponse<IEnumerable<GetInstitutionDto>>> GetAllVerifiedInstitutionsAsync()
+        {
+            _logger.LogInformation("Attempting to retrieve all institutions.");
+
+            var institutions = await _institutionRepository.GetAllAsync(i => i.VerificationStatus == VerificationStatus.Verified);
+
+            if (!institutions.Any())
+            {
+                _logger.LogInformation("No institutions found in the database.");
+                return new BaseResponse<IEnumerable<GetInstitutionDto>>(
+                    true,
+                    "No institutions found.",
+                    []);
+            }
+
+            var institutionDtos = institutions.Select(institution => new GetInstitutionDto(
+                institution.Id,
+                institution.Name));
+
+            _logger.LogInformation("Successfully retrieved {InstitutionCount} institutions.", institutions.Count);
+            return new BaseResponse<IEnumerable<GetInstitutionDto>>(
+                true,
+                "Institutions retrieved successfully.",
+                institutionDtos);
+        }
 
         public async Task<BaseResponse<bool>> UpdateInstitutionStatusAsync(Guid id, VerificationStatus status)
         {

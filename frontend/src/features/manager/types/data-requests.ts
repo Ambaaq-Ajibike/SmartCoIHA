@@ -1,17 +1,33 @@
 import { z } from "zod";
 
+export type DataRequestApprovalStatus = "Pending" | "Verified" | "Failed" | "Denied";
+
 export interface DataRequest {
+  requestId: string;
   patientInstituteName: string;
   institutePatientId: string;
   resourceType: string;
-  isApproved: boolean;
+  hasPatientApproved: boolean;
+  institutionApprovalStatus: DataRequestApprovalStatus;
   hasExpired: boolean;
+  requestedTimestamp: string;
 }
 
 export interface DataRequestsResponse {
   success: boolean;
   message?: string;
   data?: DataRequest[];
+}
+
+export interface VerifiedInstitution {
+  id: string;
+  name: string;
+}
+
+export interface VerifiedInstitutionsResponse {
+  success: boolean;
+  message?: string;
+  data?: VerifiedInstitution[];
 }
 
 export const validResourceTypes = [
@@ -30,6 +46,10 @@ export const validResourceTypes = [
 ] as const;
 
 export const createDataRequestSchema = z.object({
+  patientInstituteId: z
+    .string()
+    .trim()
+    .uuid("Select a valid patient institution."),
   institutePatientId: z
     .string()
     .trim()

@@ -8,5 +8,6 @@ namespace Application.Services.Interfaces
         Task<BaseResponse<InstitutionDto>> GetInstitutionByIdAsync(Guid id);
         Task<BaseResponse<IEnumerable<InstitutionDto>>> GetAllInstitutionsAsync();
         Task<BaseResponse<bool>> UpdateInstitutionStatusAsync(Guid id, VerificationStatus status);
+        Task<BaseResponse<IEnumerable<GetInstitutionDto>>> GetAllVerifiedInstitutionsAsync();
     }
 }

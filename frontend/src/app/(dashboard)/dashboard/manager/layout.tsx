@@ -9,6 +9,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 const navLabels: Record<string, string> = {
   "/dashboard/manager": "Overview",
   "/dashboard/manager/patients": "Patients",
+  "/dashboard/manager/fhir-endpoints": "FHIR Endpoints",
   "/dashboard/manager/data-requests": "Data Requests",
   "/dashboard/manager/profile": "Profile",
 };

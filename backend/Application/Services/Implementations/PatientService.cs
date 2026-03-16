@@ -76,7 +76,7 @@ namespace Application.Services.Implementations
                         <table style='border-collapse: collapse; margin: 20px 0;'>
                             <tr>
                                 <td style='padding: 8px; font-weight: bold;'>Patient ID:</td>
-                                <td style='padding: 8px;'>{createdPatientId}</td>
+                                <td style='padding: 8px;'>{patientDto.InstitutePatientId}</td>
                             </tr>
                             <tr>
                                 <td style='padding: 8px; font-weight: bold;'>Institution:</td>
@@ -110,6 +110,7 @@ namespace Application.Services.Implementations
             }
 
             var patientDto = new PatientDto(
+                patient.InstitutePatientId,
                 patient.Name,
                 patient.Email,
                 patient.Institution?.Name ?? "Unknown",
@@ -155,6 +156,7 @@ namespace Application.Services.Implementations
             }
 
             var patientDtos = patients.Select(patient => new PatientDto(
+                patient.InstitutePatientId,
                 patient.Name,
                 patient.Email,
                 patient.Institution?.Name ?? "Unknown",
@@ -167,7 +169,7 @@ namespace Application.Services.Implementations
                 patientDtos);
         }
 
-        public async Task<BaseResponse<bool>> AddFingerprintAsync(Guid patientId, string fingerprintTemplate)
+        public async Task<BaseResponse<bool>> AddFingerprintAsync(string patientId, string fingerprintTemplate)
         {
             _logger.LogInformation("Attempting to add biometric fingerprint for Patient ID: {PatientId}", patientId);
 
@@ -179,7 +181,7 @@ namespace Application.Services.Implementations
             }
 
             // Retrieve patient
-            var patient = await _patientRepository.GetByIdAsync(patientId);
+            var patient = await _patientRepository.GetByExpressionAsync(p => p.InstitutePatientId == patientId);
             if (patient == null)
             {
                 _logger.LogWarning("Fingerprint addition failed. Patient ID: {PatientId} not found.", patientId);
@@ -187,7 +189,7 @@ namespace Application.Services.Implementations
             }
 
             // Hash the fingerprint template with salt
-            var hashedFingerprint = HashFingerprintTemplate(fingerprintTemplate, patientId.ToString());
+            var hashedFingerprint = HashFingerprintTemplate(fingerprintTemplate, patient.ID.ToString());
 
             // Update patient fingerprint
             await patient.UpdateFingerPrint(hashedFingerprint);
@@ -448,7 +450,7 @@ namespace Application.Services.Implementations
                 <table style='border-collapse: collapse; margin: 20px 0;'>
                     <tr>
                         <td style='padding: 8px; font-weight: bold;'>Patient ID:</td>
-                        <td style='padding: 8px;'>{patient.ID}</td>
+                        <td style='padding: 8px;'>{patient.InstitutePatientId}</td>
                     </tr>
                     <tr>
                         <td style='padding: 8px; font-weight: bold;'>Institution:</td>

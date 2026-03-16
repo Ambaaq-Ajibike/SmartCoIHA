@@ -36,6 +36,16 @@ namespace API.Controllers
             return Ok(response);
         }
 
+        [HttpGet("verified")]
+        [Authorize(Roles = "InstitutionManager")]
+        [ProducesResponseType(typeof(BaseResponse<IEnumerable<GetInstitutionDto>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetVerified()
+        {
+            var response = await _institutionService.GetAllVerifiedInstitutionsAsync();
+            return Ok(response);
+        }
+
         [HttpPut("{id}/status")]
         [Authorize(Roles = "Admin")]
         [ProducesResponseType(typeof(BaseResponse<bool>), StatusCodes.Status200OK)]

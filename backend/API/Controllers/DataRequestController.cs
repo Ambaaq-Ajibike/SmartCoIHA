@@ -25,13 +25,26 @@ namespace API.Controllers
                  : BadRequest(response);
         }
 
-        [HttpGet("institution/{institutionId}")]
+        [HttpGet("institution/{institutionId}/outgoing")]
         [ProducesResponseType(typeof(BaseResponse<IEnumerable<DataRequestDto>>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(BaseResponse<IEnumerable<DataRequestDto>>), StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetDataRequestsForInstitution(Guid institutionId)
+        public async Task<IActionResult> GetOutgoingDataRequests(Guid institutionId)
         {
-            var response = await _dataRequestService.GetDataRequestsForInstitutionAsync(institutionId);
+            var response = await _dataRequestService.GetOutgoingDataRequestsAsync(institutionId);
+
+            return response.Success
+                ? Ok(response)
+                : NotFound(response);
+        }
+
+        [HttpGet("institution/{institutionId}/incoming")]
+        [ProducesResponseType(typeof(BaseResponse<IEnumerable<DataRequestDto>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(BaseResponse<IEnumerable<DataRequestDto>>), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetIncomingDataRequests(Guid institutionId)
+        {
+            var response = await _dataRequestService.GetIncomingDataRequestsAsync(institutionId);
 
             return response.Success
                 ? Ok(response)

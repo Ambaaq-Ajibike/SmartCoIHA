@@ -4,11 +4,13 @@ namespace Domain.Entities
 {
     public class DataRequest(
         Guid requestingInstitutionId,
+        Guid patientInstitutionId,
         string institutePatientId,
         string resourceType)
     {
         public Guid Id { get; private set; } = Guid.NewGuid();
         public Guid RequestingInstitutionId { get; private set; } = requestingInstitutionId;
+        public Guid PatientInstitutionId { get; private set; } = patientInstitutionId;
         public string InstitutePatientId { get; private set; } = institutePatientId;
         public string ResourceType { get; private set; } = resourceType;
         public DateTime RequestedTimestamp { get; private set; } = DateTime.UtcNow;
@@ -17,8 +19,6 @@ namespace Domain.Entities
         public bool FingerprintValidationSuccess { get; private set; } = false;
 
         public bool IsExpired() => DateTime.UtcNow > ExpiryTimestamp;
-
-        public bool IsApproved() => InstitutionApprovedStatus == VerificationStatus.Verified && FingerprintValidationSuccess;
 
         public async Task UpdateInstitutionApprovalStatus(VerificationStatus newStatus)
         {

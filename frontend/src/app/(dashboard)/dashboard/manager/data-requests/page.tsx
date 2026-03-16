@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LoaderCircle, Plus, RefreshCw } from "lucide-react";
+import { CheckCircle2, LoaderCircle, Plus, RefreshCw, ShieldX } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import AppSelect from "@/components/shared/AppSelect";
@@ -10,15 +10,24 @@ import DataTable, { type DataTableColumn } from "@/components/shared/DataTable";
 import Modal from "@/components/shared/Modal";
 import {
   createDataRequest,
-  getInstitutionDataRequests,
+  getIncomingDataRequests,
+  getOutgoingDataRequests,
+  getVerifiedInstitutions,
+  updateDataRequestApprovalStatus,
 } from "@/features/manager/services/dataRequestService";
 import {
   createDataRequestSchema,
   validResourceTypes,
   type CreateDataRequestInput,
   type DataRequest,
+  type VerifiedInstitution,
 } from "@/features/manager/types/data-requests";
 import { useAuthStore } from "@/store/useAuthStore";
+
+type RowActionState = {
+  requestId: string;
+  status: "Verified" | "Denied";
+} | null;
 
 const fieldClassName =
   "mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-primary focus:ring-4 focus:ring-emerald-100";
@@ -33,11 +42,16 @@ export default function ManagerDataRequestsPage() {
   const user = useAuthStore((state) => state.user);
   const institutionId = user?.institutionId ?? "";
 
-  const [requests, setRequests] = useState<DataRequest[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<DataRequest[]>([]);
+  const [outgoingRequests, setOutgoingRequests] = useState<DataRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [verifiedInstitutions, setVerifiedInstitutions] = useState<VerifiedInstitution[]>([]);
+  const [isLoadingInstitutions, setIsLoadingInstitutions] = useState(false);
+  const [activeTab, setActiveTab] = useState<"incoming" | "outgoing">("incoming");
+  const [rowAction, setRowAction] = useState<RowActionState>(null);
 
   const {
     register,
@@ -48,75 +62,98 @@ export default function ManagerDataRequestsPage() {
   } = useForm<CreateDataRequestInput>({
     resolver: zodResolver(createDataRequestSchema),
     defaultValues: {
+      patientInstituteId: "",
       institutePatientId: "",
       resourceType: "Patient",
     },
   });
 
-  const columns = useMemo<DataTableColumn<DataRequest>[]>(() => {
-    if (requests.length === 0) return [];
+  const patientInstitutionOptions = useMemo(
+    () =>
+      verifiedInstitutions.map((institution) => ({
+        value: institution.id,
+        label: institution.name,
+        description: institution.id,
+      })),
+    [verifiedInstitutions],
+  );
 
-    return Object.keys(requests[0]).map((key) => {
-      if (key === "isApproved") {
-        return {
-          key,
-          header: "Approval",
-          render: (value: unknown) => {
-            const approved = value === true;
-            return (
-              <span
-                className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                  approved ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                }`}
-              >
-                {approved ? "Approved" : "Pending"}
-              </span>
-            );
-          },
-        } satisfies DataTableColumn<DataRequest>;
-      }
-
-      if (key === "hasExpired") {
-        return {
-          key,
-          header: "Expiration",
-          render: (value: unknown) => {
-            const expired = value === true;
-            return (
-              <span
-                className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                  expired ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"
-                }`}
-              >
-                {expired ? "Expired" : "Active"}
-              </span>
-            );
-          },
-        } satisfies DataTableColumn<DataRequest>;
-      }
-
-      if (key === "patientInstituteName") {
-        return {
-          key,
-          header: "Patient Institution",
-          className: "font-medium text-ink",
-        } satisfies DataTableColumn<DataRequest>;
-      }
-
-      if (key === "institutePatientId") {
-        return {
-          key,
-          header: "Patient ID",
-        } satisfies DataTableColumn<DataRequest>;
-      }
-
-      return { key } satisfies DataTableColumn<DataRequest>;
-    });
-  }, [requests]);
+  const columns = useMemo<DataTableColumn<DataRequest>[]>(
+    () => [
+      {
+        key: "patientInstituteName",
+        header: "Patient Institution",
+        className: "font-medium text-ink",
+      },
+      {
+        key: "institutePatientId",
+        header: "Patient ID",
+      },
+      {
+        key: "resourceType",
+        header: "Resource",
+      },
+      {
+        key: "requestedTimestamp",
+        header: "Requested At",
+        render: (value: unknown) => formatTimestamp(value),
+      },
+      {
+        key: "hasPatientApproved",
+        header: "Patient Approval",
+        render: (value: unknown) => {
+          const approved = value === true;
+          return (
+            <span
+              className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                approved ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+              }`}
+            >
+              {approved ? "Approved" : "Pending"}
+            </span>
+          );
+        },
+      },
+      {
+        key: "institutionApprovalStatus",
+        header: "Institution Status",
+        render: (value: unknown) => {
+          const status = typeof value === "string" ? value : "Pending";
+          return (
+            <span
+              className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getInstitutionStatusClasses(
+                status,
+              )}`}
+            >
+              {status}
+            </span>
+          );
+        },
+      },
+      {
+        key: "hasExpired",
+        header: "Expiration",
+        render: (value: unknown) => {
+          const expired = value === true;
+          return (
+            <span
+              className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                expired ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"
+              }`}
+            >
+              {expired ? "Expired" : "Active"}
+            </span>
+          );
+        },
+      },
+    ],
+    [],
+  );
 
   const loadRequests = useCallback(async (refresh = false) => {
     if (!institutionId) {
-      setRequests([]);
+      setIncomingRequests([]);
+      setOutgoingRequests([]);
       setError("Your account is not linked to an institution yet.");
       setIsLoading(false);
       return;
@@ -130,8 +167,13 @@ export default function ManagerDataRequestsPage() {
         setIsLoading(true);
       }
 
-      const data = await getInstitutionDataRequests(institutionId);
-      setRequests(data);
+      const [incoming, outgoing] = await Promise.all([
+        getIncomingDataRequests(institutionId),
+        getOutgoingDataRequests(institutionId),
+      ]);
+
+      setIncomingRequests(incoming);
+      setOutgoingRequests(outgoing);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load data requests.";
       setError(message);
@@ -146,6 +188,23 @@ export default function ManagerDataRequestsPage() {
     void loadRequests();
   }, [loadRequests]);
 
+  const loadVerifiedInstitutions = useCallback(async () => {
+    try {
+      setIsLoadingInstitutions(true);
+      const data = await getVerifiedInstitutions();
+      setVerifiedInstitutions(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load institutions.";
+      toast.error(message, { duration: 6000 });
+    } finally {
+      setIsLoadingInstitutions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadVerifiedInstitutions();
+  }, [loadVerifiedInstitutions]);
+
   const onSubmit = handleSubmit(async (values) => {
     if (!institutionId) {
       toast.error("No institution linked to your account.", { duration: 6000 });
@@ -155,19 +214,37 @@ export default function ManagerDataRequestsPage() {
     try {
       const message = await createDataRequest({
         requestingInstitutionId: institutionId,
+        patientInstituteId: values.patientInstituteId,
         institutePatientId: values.institutePatientId,
         resourceType: values.resourceType,
       });
 
       toast.success(message, { duration: 5000 });
       setIsModalOpen(false);
-      reset({ institutePatientId: "", resourceType: "Patient" });
+      reset({ patientInstituteId: "", institutePatientId: "", resourceType: "Patient" });
       await loadRequests(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to submit data request.";
       toast.error(message, { duration: 6000 });
     }
   });
+
+  async function handleIncomingApproval(
+    requestId: string,
+    status: "Verified" | "Denied",
+  ) {
+    try {
+      setRowAction({ requestId, status });
+      const message = await updateDataRequestApprovalStatus(requestId, status);
+      toast.success(message, { duration: 5000 });
+      await loadRequests(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update request status.";
+      toast.error(message, { duration: 6000 });
+    } finally {
+      setRowAction(null);
+    }
+  }
 
   return (
     <section className="space-y-6">
@@ -206,16 +283,114 @@ export default function ManagerDataRequestsPage() {
           {error}
         </div>
       ) : (
-        <DataTable
-          data={requests}
-          columns={columns}
-          rowKey={(_, index) => index}
-          emptyMessage="No data requests found for this institution."
-        />
+        <div className="space-y-4 rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+          <div className="inline-flex rounded-xl border border-emerald-200 bg-emerald-50/70 p-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab("incoming")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                activeTab === "incoming"
+                  ? "bg-primary text-white shadow"
+                  : "text-ink hover:bg-emerald-100"
+              }`}
+            >
+              Incoming ({incomingRequests.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("outgoing")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                activeTab === "outgoing"
+                  ? "bg-primary text-white shadow"
+                  : "text-ink hover:bg-emerald-100"
+              }`}
+            >
+              Outgoing ({outgoingRequests.length})
+            </button>
+          </div>
+
+          {activeTab === "incoming" ? (
+            <DataTable
+              data={incomingRequests}
+              columns={columns}
+              rowKey={(row, index) => `${row.requestId}-incoming-${index}`}
+              actionsHeader="Actions"
+              renderActions={(row) => {
+                const isVerifying =
+                  rowAction?.requestId === row.requestId && rowAction.status === "Verified";
+                const isDenying = rowAction?.requestId === row.requestId && rowAction.status === "Denied";
+                const isBusy = rowAction?.requestId === row.requestId;
+                const canTakeAction =
+                  !row.hasExpired && row.institutionApprovalStatus === "Pending";
+
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleIncomingApproval(row.requestId, "Verified");
+                      }}
+                      disabled={!canTakeAction || isBusy}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isVerifying ? (
+                        <LoaderCircle className="size-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="size-3.5" />
+                      )}
+                      Approve
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleIncomingApproval(row.requestId, "Denied");
+                      }}
+                      disabled={!canTakeAction || isBusy}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isDenying ? (
+                        <LoaderCircle className="size-3.5 animate-spin" />
+                      ) : (
+                        <ShieldX className="size-3.5" />
+                      )}
+                      Reject
+                    </button>
+                  </>
+                );
+              }}
+              emptyMessage="No incoming data requests."
+            />
+          ) : (
+            <DataTable
+              data={outgoingRequests}
+              columns={columns}
+              rowKey={(row, index) => `${row.requestId}-outgoing-${index}`}
+              emptyMessage="No outgoing data requests."
+            />
+          )}
+        </div>
       )}
 
       <Modal open={isModalOpen} title="Make Data Request" onClose={() => setIsModalOpen(false)}>
         <form className="space-y-4" onSubmit={onSubmit} noValidate>
+          <Controller
+            name="patientInstituteId"
+            control={control}
+            render={({ field }) => (
+              <AppSelect
+                id="patientInstituteId"
+                label="Patient Institution"
+                value={field.value}
+                onChange={field.onChange}
+                options={patientInstitutionOptions}
+                placeholder="Select verified institution"
+                error={errors.patientInstituteId?.message}
+                disabled={isSubmitting || isLoadingInstitutions}
+              />
+            )}
+          />
+
           <div>
             <label htmlFor="institutePatientId" className="text-sm font-medium text-ink">
               Institute Patient ID
@@ -269,4 +444,24 @@ export default function ManagerDataRequestsPage() {
       </Modal>
     </section>
   );
+}
+
+function formatTimestamp(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) {
+    return "-";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString();
+}
+
+function getInstitutionStatusClasses(status: string) {
+  if (status === "Verified") return "bg-emerald-100 text-emerald-800";
+  if (status === "Failed") return "bg-amber-100 text-amber-800";
+  if (status === "Denied") return "bg-red-100 text-red-700";
+  return "bg-slate-100 text-slate-700";
 }

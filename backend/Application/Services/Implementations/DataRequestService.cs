@@ -44,9 +44,19 @@ namespace Application.Services.Implementations
                     "Requesting institution not found.",
                     Guid.Empty);
             }
+            // Validate patient exists
+            var patientInstitution = await _institutionRepository.GetByExpressionAsync(x => x.Id == dataRequestDto.PatientInstituteId);
+            if (patientInstitution == null)
+            {
+                _logger.LogWarning("Data request failed. Patient Institution not found for ID: {InstitutePatientId}", dataRequestDto.PatientInstituteId);
+                return new BaseResponse<Guid>(
+                    false,
+                    "Patient Institution not found.",
+                    Guid.Empty);
+            }
 
             // Validate patient exists
-            var patient = await _patientRepository.GetByExpressionAsync(x => x.InstitutePatientId == dataRequestDto.InstitutePatientId);
+            var patient = await _patientRepository.GetByExpressionAsync(p => p.InstitutePatientId == dataRequestDto.InstitutePatientId && p.InstitutionID == dataRequestDto.PatientInstituteId);
             if (patient == null)
             {
                 _logger.LogWarning("Data request failed. Patient not found for ID: {InstitutePatientId}", dataRequestDto.InstitutePatientId);
@@ -70,6 +80,7 @@ namespace Application.Services.Implementations
             // Create data request
             var dataRequest = new DataRequest(
                 dataRequestDto.RequestingInstitutionId,
+                patient.InstitutionID,
                 dataRequestDto.InstitutePatientId,
                 dataRequestDto.ResourceType);
 
@@ -114,11 +125,15 @@ namespace Application.Services.Implementations
                     var requestingInstitution = await _institutionRepository.GetByIdAsync(request.RequestingInstitutionId);
 
                     var dto = new DataRequestDto(
+                        request.Id,
                         requestingInstitution?.Name ?? "Unknown Institution",
                         request.InstitutePatientId,
                         request.ResourceType,
-                        request.IsApproved(),
-                        request.IsExpired());
+                        request.FingerprintValidationSuccess,
+                        request.InstitutionApprovedStatus.ToString(),
+                        request.IsExpired(),
+                        request.RequestedTimestamp.ToString("yyyy-MM-dd HH:mm:ss")
+                        );
 
                     requestDtos.Add(dto);
                 }
@@ -140,12 +155,21 @@ namespace Application.Services.Implementations
                 requestDtos);
         }
 
-        public async Task<BaseResponse<bool>> UpdateInstitutionApprovalStatusAsync(Guid requestId, VerificationStatus newStatus)
+        public async Task<BaseResponse<bool>> UpdateInstitutionApprovalStatusAsync(Guid requestId, string newStatus)
         {
             _logger.LogInformation("Attempting to update status for Data Request: {DataRequestId} to {VerificationStatus}", requestId, newStatus);
 
+            if (!Enum.TryParse<VerificationStatus>(newStatus, true, out var parsedStatus))
+            {
+                _logger.LogWarning("Status update failed for Data Request: {DataRequestId}. Invalid Status Format: {VerificationStatus}", requestId, newStatus);
+                return new BaseResponse<bool>(
+                    false,
+                    "Invalid status format. Please provide a valid status.",
+                    false);
+            }
             // Validate status
-            if (newStatus != VerificationStatus.Verified && newStatus != VerificationStatus.Denied)
+
+            if (parsedStatus != VerificationStatus.Verified && parsedStatus != VerificationStatus.Denied)
             {
                 _logger.LogWarning("Status update failed for Data Request: {DataRequestId}. Invalid Status: {VerificationStatus}", requestId, newStatus);
                 return new BaseResponse<bool>(
@@ -176,11 +200,11 @@ namespace Application.Services.Implementations
             }
 
             // Update approval status
-            await dataRequest.UpdateInstitutionApprovalStatus(newStatus);
+            await dataRequest.UpdateInstitutionApprovalStatus(parsedStatus);
             _dataRequestRepository.Update(dataRequest);
             await _dataRequestRepository.SaveChangesAsync();
 
-            var statusText = newStatus == VerificationStatus.Verified ? "approved" : "rejected";
+            var statusText = parsedStatus == VerificationStatus.Verified ? "approved" : "rejected";
             _logger.LogInformation("Successfully updated Data Request: {DataRequestId} to {VerificationStatus}", requestId, newStatus);
 
             return new BaseResponse<bool>(
@@ -426,6 +450,76 @@ namespace Application.Services.Implementations
             }
         }
 
+        public async Task<BaseResponse<IEnumerable<DataRequestDto>>> GetOutgoingDataRequestsAsync(Guid institutionId)
+        {
+            _logger.LogInformation("Attempting to get outgoing data requests for Institution ID: {InstitutionId}", institutionId);
+
+            var institution = await _institutionRepository.GetByIdAsync(institutionId);
+            if (institution == null)
+            {
+                _logger.LogWarning("Failed to retrieve outoing data requests. Institution ID: {InstitutionId} not found.", institutionId);
+                return new BaseResponse<IEnumerable<DataRequestDto>>(false, "Institution not found.", []);
+            }
+
+            // Get requests made BY this institution
+            var allRequests = await _dataRequestRepository.GetAllAsync(dr => dr.RequestingInstitutionId == institutionId);
+            var requestDtos = new List<DataRequestDto>();
+
+            foreach (var request in allRequests)
+            {
+                // the target is the patient's institution
+                var patientInstitution = await _institutionRepository.GetByIdAsync(request.PatientInstitutionId);
+
+                requestDtos.Add(new DataRequestDto(
+                    request.Id,
+                    patientInstitution?.Name ?? "Unknown Institution",
+                    request.InstitutePatientId,
+                    request.ResourceType,
+                    request.FingerprintValidationSuccess,
+                    request.InstitutionApprovedStatus.ToString(),
+                    request.IsExpired(),
+                    request.RequestedTimestamp.ToString("yyyy-MM-dd HH:mm:ss")
+                ));
+            }
+
+            _logger.LogInformation("Successfully retrieved {DataRequestCount} outgoing data request(s) for Institution ID: {InstitutionId}", requestDtos.Count, institutionId);
+            return new BaseResponse<IEnumerable<DataRequestDto>>(true, $"{requestDtos.Count} outgoing data request(s) retrieved successfully.", requestDtos);
+        }
+
+        public async Task<BaseResponse<IEnumerable<DataRequestDto>>> GetIncomingDataRequestsAsync(Guid institutionId)
+        {
+            _logger.LogInformation("Attempting to get incoming data requests for Institution ID: {InstitutionId}", institutionId);
+
+            var institution = await _institutionRepository.GetByIdAsync(institutionId);
+            if (institution == null)
+            {
+                _logger.LogWarning("Failed to retrieve incoming data requests. Institution ID: {InstitutionId} not found.", institutionId);
+                return new BaseResponse<IEnumerable<DataRequestDto>>(false, "Institution not found.", []);
+            }
+
+            // Get requests made TO this institution (where the patient is registered)
+            var allRequests = await _dataRequestRepository.GetAllAsync(dr => dr.PatientInstitutionId == institutionId);
+            var requestDtos = new List<DataRequestDto>();
+
+            foreach (var request in allRequests)
+            {
+                var requestingInstitution = await _institutionRepository.GetByIdAsync(request.RequestingInstitutionId);
+
+                requestDtos.Add(new DataRequestDto(
+                    request.Id,
+                    requestingInstitution?.Name ?? "Unknown Institution",
+                    request.InstitutePatientId,
+                    request.ResourceType,
+                    request.FingerprintValidationSuccess,
+                    request.InstitutionApprovedStatus.ToString(),
+                    request.IsExpired(),
+                    request.RequestedTimestamp.ToString("yyyy-MM-dd HH:mm:ss")
+                ));
+            }
+
+            _logger.LogInformation("Successfully retrieved {DataRequestCount} incoming data request(s) for Institution ID: {InstitutionId}", requestDtos.Count, institutionId);
+            return new BaseResponse<IEnumerable<DataRequestDto>>(true, $"{requestDtos.Count} incoming data request(s) retrieved successfully.", requestDtos);
+        }
         private async Task<(bool IsSuccess, string? BaseUrl, string? ErrorMessage)> GetInstitutionFhirEndpointAsync(Guid institutionId)
         {
             var endpoint = await _endpointRepository.GetByExpressionAsync(e =>
