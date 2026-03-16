@@ -3,6 +3,7 @@ import type {
   CreateDataRequestPayload,
   DataRequest,
   DataRequestApprovalStatus,
+  DataRequestResourceDataResponse,
   DataRequestsResponse,
   VerifiedInstitution,
   VerifiedInstitutionsResponse,
@@ -95,6 +96,23 @@ export async function updateDataRequestApprovalStatus(
     );
 
     return getApiSuccessMessage(response, "Request approval status updated successfully.");
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error));
+  }
+}
+
+export async function getDataRequestResourceData(requestId: string): Promise<unknown> {
+  try {
+    const response = await get<DataRequestResourceDataResponse>(
+      `${dataRequestUrl}/${requestId}/resource-data`,
+      {
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+
+    return response?.data;
   } catch (error) {
     throw new Error(getApiErrorMessage(error));
   }

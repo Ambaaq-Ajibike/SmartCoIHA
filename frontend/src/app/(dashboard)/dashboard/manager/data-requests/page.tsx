@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CheckCircle2, LoaderCircle, Plus, RefreshCw, ShieldX } from "lucide-react";
+import { CheckCircle2, Eye, LoaderCircle, Plus, RefreshCw, ShieldX } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import AppSelect from "@/components/shared/AppSelect";
 import DataTable, { type DataTableColumn } from "@/components/shared/DataTable";
 import Modal from "@/components/shared/Modal";
+import FhirResourceViewer from "@/features/manager/components/FhirResourceViewer";
 import {
   createDataRequest,
+  getDataRequestResourceData,
   getIncomingDataRequests,
   getOutgoingDataRequests,
   getVerifiedInstitutions,
@@ -52,6 +54,10 @@ export default function ManagerDataRequestsPage() {
   const [isLoadingInstitutions, setIsLoadingInstitutions] = useState(false);
   const [activeTab, setActiveTab] = useState<"incoming" | "outgoing">("incoming");
   const [rowAction, setRowAction] = useState<RowActionState>(null);
+  const [viewingRequestId, setViewingRequestId] = useState<string | null>(null);
+  const [resourceModalOpen, setResourceModalOpen] = useState(false);
+  const [resourceModalTitle, setResourceModalTitle] = useState("Resource Data");
+  const [resourceData, setResourceData] = useState<unknown>(null);
 
   const {
     register,
@@ -246,6 +252,21 @@ export default function ManagerDataRequestsPage() {
     }
   }
 
+  async function handleViewResourceData(row: DataRequest) {
+    try {
+      setViewingRequestId(row.requestId);
+      const data = await getDataRequestResourceData(row.requestId);
+      setResourceData(data);
+      setResourceModalTitle(`${row.resourceType} Data`);
+      setResourceModalOpen(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to fetch requested resource data.";
+      toast.error(message, { duration: 6000 });
+    } finally {
+      setViewingRequestId(null);
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -366,6 +387,32 @@ export default function ManagerDataRequestsPage() {
               data={outgoingRequests}
               columns={columns}
               rowKey={(row, index) => `${row.requestId}-outgoing-${index}`}
+              actionsHeader="Actions"
+              renderActions={(row) => {
+                const isLoadingView = viewingRequestId === row.requestId;
+                const canView =
+                  row.hasPatientApproved
+                  && row.institutionApprovalStatus === "Verified"
+                  && !row.hasExpired;
+
+                return (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleViewResourceData(row);
+                    }}
+                    disabled={!canView || isLoadingView}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isLoadingView ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <Eye className="size-3.5" />
+                    )}
+                    View
+                  </button>
+                );
+              }}
               emptyMessage="No outgoing data requests."
             />
           )}
@@ -441,6 +488,17 @@ export default function ManagerDataRequestsPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={resourceModalOpen}
+        title={resourceModalTitle}
+        onClose={() => {
+          setResourceModalOpen(false);
+          setResourceData(null);
+        }}
+      >
+        <FhirResourceViewer data={resourceData} />
       </Modal>
     </section>
   );

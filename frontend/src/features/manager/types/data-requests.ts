@@ -19,6 +19,12 @@ export interface DataRequestsResponse {
   data?: DataRequest[];
 }
 
+export interface DataRequestResourceDataResponse {
+  success: boolean;
+  message?: string;
+  data?: unknown;
+}
+
 export interface VerifiedInstitution {
   id: string;
   name: string;
