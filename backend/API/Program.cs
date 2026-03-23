@@ -91,28 +91,36 @@ try
 
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
-    builder.Services.AddSwaggerGen(options =>
+    builder.Services.AddOpenApi(options =>
     {
-        options.SwaggerDoc("v1", new OpenApiInfo
+        options.AddDocumentTransformer((document, context, cancellationToken) =>
         {
-            Title = "SmartCoIHA API",
-            Version = "v1",
-            Description = "API documentation"
+            var schemeName = "Bearer";
+            var bearerScheme = new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT",
+                Description = "Enter your valid token in the text input below.\n\nExample: \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\""
+            };
+
+            // Initialize components if they are null
+            document.Components ??= new OpenApiComponents();
+            document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+            document.Components.SecuritySchemes[schemeName] = bearerScheme;
+
+            // Apply globally to all operations
+            var reference = new OpenApiSecuritySchemeReference(schemeName, document);
+            document.Security =
+            [
+                new() { [reference] = [] }
+            ];
+
+            return Task.CompletedTask;
         });
 
-        // JWT Authentication
-        options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-        {
-            Name = "Authorization",
-            Type = SecuritySchemeType.Http,
-            Scheme = "bearer",
-            BearerFormat = "JWT",
-            In = ParameterLocation.Header,
-            Description = "Enter your JWT token below. Example: Bearer {your token}"
-        });
     });
 
-    builder.Services.AddOpenApi();
 
     var app = builder.Build();
 
@@ -122,15 +130,18 @@ try
     // Configure the HTTP request pipeline.
     if (app.Environment.IsDevelopment())
     {
-        app.MapOpenApi();
+        app.MapOpenApi(); // Hosts OpenAPI doc at /openapi/v1.json
+        app.UseSwaggerUI(options =>
+        {
+            // Point Swagger UI to the new standard .NET OpenAPI endpoint
+            options.SwaggerEndpoint("/openapi/v1.json", "SmartCoIHA API v1");
+        });
     }
 
-    app.UseSwagger();
-    app.UseSwaggerUI();
+
     app.UseMiddleware<ExceptionHandlingMiddleware>();
     app.UseHttpsRedirection();
 
-    // ENABLE CORS (Must be before Authentication/Authorization)
     app.UseCors("AllowAll");
 
     app.UseAuthentication();

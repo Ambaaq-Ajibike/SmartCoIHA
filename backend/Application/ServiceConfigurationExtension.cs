@@ -14,7 +14,8 @@ namespace Application
             services.AddScoped<IDataRequestService, DataRequestService>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<FhirValidationService>();
-            services.AddScoped<IAdminAnalyticsService, AdminAnalyticsService>();
+
+            services.AddScoped<IAnalyticsService, AnalyticsService>();
         }
     }
 }

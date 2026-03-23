@@ -50,7 +50,7 @@ namespace Persistence
             );
 
             services.AddScoped<ICacheService, RedisCacheService>();
-            services.AddScoped<IAdminAnalyticsRepository, AdminAnalyticsRepository>();
+            services.AddScoped<IAnalyticsRepository, AnalyticsRepository>();
         }
     }
 }
