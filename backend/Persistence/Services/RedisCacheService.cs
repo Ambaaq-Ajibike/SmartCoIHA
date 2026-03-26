@@ -9,14 +9,14 @@ namespace Persistence.Services
     {
         private readonly IDatabase _database = redis.GetDatabase();
 
-        public async Task<T?> GetAsync<T>(string key)
+        public async Task<string> GetAsync(string key)
         {
             var value = await _database.StringGetAsync(key);
 
             if (value.IsNullOrEmpty)
-                return default;
+                return null;
 
-            return JsonSerializer.Deserialize<T>(value.ToString());
+            return value.ToString();
         }
 
         public async Task SetAsync<T>(string key, T value, TimeSpan? expiry = null)
@@ -30,6 +30,18 @@ namespace Persistence.Services
             else
             {
                 await _database.StringSetAsync(key, serialized, null, When.Always);
+            }
+        }
+
+        public async Task SetRawAsync(string key, string value, TimeSpan? expiry = null)
+        {
+            if (expiry.HasValue)
+            {
+                await _database.StringSetAsync(key, value, expiry.Value, When.Always);
+            }
+            else
+            {
+                await _database.StringSetAsync(key, value, null, When.Always);
             }
         }
 

@@ -6,6 +6,7 @@ using Domain.Entities;
 using Domain.Enums;
 using Hl7.Fhir.Model;
 using Hl7.Fhir.Rest;
+using Hl7.Fhir.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Services.Implementations
@@ -384,14 +385,24 @@ namespace Application.Services.Implementations
             var cacheKey = $"fhir_resource:{dataRequest.InstitutePatientId}:{dataRequest.ResourceType.ToLower()}";
 
             // Check if data exists in cache
-            var cachedResource = await _cacheService.GetAsync<Resource>(cacheKey);
-            if (cachedResource != null)
+            var cachedJson = await _cacheService.GetAsync(cacheKey);
+            if (cachedJson != null)
             {
-                _logger.LogInformation("Cache hit for resource query. Key: {CacheKey}", cacheKey);
-                return new BaseResponse<Resource>(
-                    true,
-                    "Patient resource data retrieved successfully from cache.",
-                    cachedResource);
+                try
+                {
+                    _logger.LogInformation("Cache hit for resource query. Key: {CacheKey}", cacheKey);
+                    var parser = new FhirJsonParser();
+                    var cachedResource = parser.Parse<Resource>(cachedJson);
+                    return new BaseResponse<Resource>(
+                        true,
+                        "Patient resource data retrieved successfully from cache.",
+                        cachedResource);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to deserialize cached FHIR resource. Evicting stale cache entry. Key: {CacheKey}", cacheKey);
+                    await _cacheService.RemoveAsync(cacheKey);
+                }
             }
 
             _logger.LogInformation("Cache miss for resource query. Proceeding to fetch from FHIR endpoint for Key: {CacheKey}", cacheKey);
@@ -429,9 +440,11 @@ namespace Application.Services.Implementations
                        null);
                 }
 
-                // Cache the resource data for 2 hours
+                // Cache the resource data as FHIR JSON for 2 hours
                 var cacheExpiration = TimeSpan.FromHours(2);
-                await _cacheService.SetAsync(cacheKey, resourceData, cacheExpiration);
+                var serializer = new FhirJsonSerializer();
+                var resourceJson = serializer.SerializeToString(resourceData);
+                await _cacheService.SetRawAsync(cacheKey, resourceJson, cacheExpiration);
 
                 _logger.LogInformation("Successfully fetched and cached FHIR resource data. Source Cached: {CacheKey}", cacheKey);
 
