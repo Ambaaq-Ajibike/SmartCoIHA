@@ -17,6 +17,7 @@ namespace Application.Services.Implementations
         IGenericRepository<InstituteBaserUrl> _endpointRepository,
         IGenericRepository<Institution> _institutionRepository,
         ICacheService _cacheService,
+        INotificationService _notificationService,
         ILogger<DataRequestService> _logger) : IDataRequestService
     {
         public async Task<BaseResponse<Guid>> MakeDataRequestAsync(MakeDataRequestDto dataRequestDto)
@@ -89,6 +90,14 @@ namespace Application.Services.Implementations
             await _dataRequestRepository.SaveChangesAsync();
 
             _logger.LogInformation("Successfully created Data Request: {DataRequestId}", createdRequest.Id);
+
+            // Send notification to patient
+            await _notificationService.CreateNotificationAsync(
+                patient.ID,
+                "New Data Request",
+                $"{requestingInstitution.Name} has requested access to your {dataRequestDto.ResourceType} records.",
+                NotificationType.DataRequestCreated,
+                createdRequest.Id);
 
             return new BaseResponse<Guid>(
                 true,
@@ -208,6 +217,33 @@ namespace Application.Services.Implementations
             var statusText = parsedStatus == VerificationStatus.Verified ? "approved" : "rejected";
             _logger.LogInformation("Successfully updated Data Request: {DataRequestId} to {VerificationStatus}", requestId, newStatus);
 
+            // Send notification to patient
+            var patient = await _patientRepository.GetByExpressionAsync(p => p.InstitutePatientId == dataRequest.InstitutePatientId);
+            if (patient != null)
+            {
+                var requestingInstitution = await _institutionRepository.GetByIdAsync(dataRequest.RequestingInstitutionId);
+                var institutionName = requestingInstitution?.Name ?? "An institution";
+
+                if (parsedStatus == VerificationStatus.Verified)
+                {
+                    await _notificationService.CreateNotificationAsync(
+                        patient.ID,
+                        "Request Approved — Your Fingerprint Needed",
+                        $"The request for your {dataRequest.ResourceType} by {institutionName} has been approved by your institution. Your fingerprint is needed to complete the process.",
+                        NotificationType.InstitutionApproved,
+                        requestId);
+                }
+                else
+                {
+                    await _notificationService.CreateNotificationAsync(
+                        patient.ID,
+                        "Data Request Denied",
+                        $"The request for your {dataRequest.ResourceType} by {institutionName} has been denied by your institution.",
+                        NotificationType.InstitutionDenied,
+                        requestId);
+                }
+            }
+
             return new BaseResponse<bool>(
                 true,
                 $"Data request {statusText} successfully.",
@@ -302,6 +338,16 @@ namespace Application.Services.Implementations
             await _dataRequestRepository.SaveChangesAsync();
 
             _logger.LogInformation("Successfully verified fingerprint and approved access for Data Request: {DataRequestId}", requestId);
+
+            // Send notification to patient
+            var requestingInstitution = await _institutionRepository.GetByIdAsync(dataRequest.RequestingInstitutionId);
+            await _notificationService.CreateNotificationAsync(
+                patient.ID,
+                "Access Approved",
+                $"You have approved access to your {dataRequest.ResourceType} records for {requestingInstitution?.Name ?? "the requesting institution"}.",
+                NotificationType.PatientApproved,
+                requestId);
+
             return new BaseResponse<bool>(
                 true,
                 "Patient fingerprint verified successfully. Data request is now approved for access.",

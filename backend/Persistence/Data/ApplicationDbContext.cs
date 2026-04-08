@@ -14,6 +14,8 @@ namespace Persistence.Data
         public DbSet<InstitutionManager> InstitutionManagers { get; set; }
         public DbSet<FhirResourceStatus> FhirResourceStatuses { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
+        public DbSet<Notification> Notifications { get; set; }
+        public DbSet<DeviceToken> DeviceTokens { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

@@ -37,7 +37,7 @@ namespace API.Controllers
         }
 
         [HttpGet("verified")]
-        [Authorize(Roles = "InstitutionManager")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(BaseResponse<IEnumerable<GetInstitutionDto>>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetVerified()

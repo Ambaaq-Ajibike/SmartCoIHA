@@ -87,7 +87,15 @@ namespace Application.Services.Implementations
                                 <td style='padding: 8px;'>Pending Verification</td>
                             </tr>
                         </table>
-                        <p>Your enrollment status is currently pending verification. We will notify you once the verification process is complete.</p>
+                        <p>Your enrollment status is currently pending verification. To complete your enrollment, please open the SmartCoIHA mobile app using the link below:</p>
+                        <p style='margin: 20px 0;'>
+                            <a href='smartcoiha://onboard?patientId={patientDto.InstitutePatientId}&institutionId={patientDto.InstitutionId}'
+                               style='background-color: #065f46; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;'>
+                                Open SmartCoIHA App
+                            </a>
+                        </p>
+                        <p>If the button above does not work, copy and paste this link into your mobile browser:</p>
+                        <p style='word-break: break-all; color: #065f46;'>smartcoiha://onboard?patientId={patientDto.InstitutePatientId}&institutionId={patientDto.InstitutionId}</p>
                         <br>
                         <p>Best regards,<br><strong>SmartCoIHA Team</strong></p>
                     </body>
@@ -461,7 +469,15 @@ namespace Application.Services.Implementations
                         <td style='padding: 8px;'>Pending Verification</td>
                     </tr>
                 </table>
-                <p>Your enrollment status is currently pending verification.</p>
+                <p>Your enrollment status is currently pending verification. To complete your enrollment, please open the SmartCoIHA mobile app using the link below:</p>
+                <p style='margin: 20px 0;'>
+                    <a href='smartcoiha://onboard?patientId={patient.InstitutePatientId}&institutionId={patient.InstitutionID}'
+                       style='background-color: #065f46; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;'>
+                        Open SmartCoIHA App
+                    </a>
+                </p>
+                <p>If the button above does not work, copy and paste this link into your mobile browser:</p>
+                <p style='word-break: break-all; color: #065f46;'>smartcoiha://onboard?patientId={patient.InstitutePatientId}&institutionId={patient.InstitutionID}</p>
                 <br>
                 <p>Best regards,<br><strong>SmartCoIHA Team</strong></p>
             </body>

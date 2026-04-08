@@ -4,5 +4,6 @@
     {
         Admin,
         InstitutionManager,
+        Patient,
     }
 }

@@ -16,6 +16,8 @@ namespace Application
             services.AddScoped<FhirValidationService>();
 
             services.AddScoped<IAnalyticsService, AnalyticsService>();
+            services.AddScoped<IPatientMobileService, PatientMobileService>();
+            services.AddScoped<INotificationService, NotificationService>();
         }
     }
 }

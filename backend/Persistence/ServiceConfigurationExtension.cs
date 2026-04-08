@@ -9,6 +9,7 @@ using Persistence.Data.Repositories;
 using Persistence.EmailServices;
 using Persistence.Interceptors; // Make sure to import your interceptor
 using Persistence.Messaging;
+using Persistence.PushNotifications;
 using Persistence.Services;
 using StackExchange.Redis;
 
@@ -51,6 +52,7 @@ namespace Persistence
 
             services.AddScoped<ICacheService, RedisCacheService>();
             services.AddScoped<IAnalyticsRepository, AnalyticsRepository>();
+            services.AddScoped<IPushNotificationService, FcmPushNotificationService>();
         }
     }
 }
